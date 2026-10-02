@@ -259,8 +259,13 @@ private fun RunCard(number: Int, run: AccelerationRun, units: com.obdscanner.cor
             color = TextBright
         )
         run.splits.forEach { split ->
-            val value = if (split.speedKmh != null) {
-                "%.2f с · %s".format(split.seconds, Format.value(split.speedKmh, ObdUnit.KMH, 0, units))
+            // Скорость на финише есть только у замеров по дистанции. Копия в
+            // локальную переменную нужна не для красоты: умное приведение типа
+            // не работает для свойства из другого модуля (:core), и компилятор
+            // такой код не пропустит.
+            val trapSpeed = split.speedKmh
+            val value = if (trapSpeed != null) {
+                "%.2f с · %s".format(split.seconds, Format.value(trapSpeed, ObdUnit.KMH, 0, units))
             } else {
                 "%.2f с".format(split.seconds)
             }
