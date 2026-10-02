@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Настоящая тема оформления - Material 3 из ui/theme/Theme.kt (Compose).
+      Этот XML-стиль нужен только как тема окна ДО первой отрисовки Compose,
+      чтобы не мелькал белый фон.
+    -->
+    <style name="Theme.ObdScanner" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/carbon</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/carbon</item>
+        <item name="android:navigationBarColor" tools:targetApi="21">@color/carbon</item>
+    </style>
+</resources>

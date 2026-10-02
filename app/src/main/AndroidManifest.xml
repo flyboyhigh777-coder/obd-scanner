@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Bluetooth. С Android 12 (API 31) старые BLUETOOTH/BLUETOOTH_ADMIN заменены
+      на BLUETOOTH_CONNECT, который спрашивается в рантайме - поэтому старые
+      объявлены с maxSdkVersion="30".
+
+      BLUETOOTH_SCAN сознательно НЕ запрашивается: приложение работает только с
+      уже сопряжёнными адаптерами (их список отдаёт система без поиска), а поиск
+      новых устройств на Android требовал бы ещё и доступ к местоположению -
+      просить геопозицию ради диагностики машины неуместно. Сопряжение делается
+      один раз в настройках Bluetooth телефона.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Wi-Fi адаптеры ELM327 поднимают свою точку доступа: связь с ними - обычный TCP-сокет. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Приложение полезно и без Bluetooth (Wi-Fi адаптер, демо-режим). -->
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
+
+    <application
+        android:name=".ObdApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ObdScanner">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.ObdScanner">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Отправка выгруженного CSV в другое приложение (почта, мессенджер). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+</manifest>

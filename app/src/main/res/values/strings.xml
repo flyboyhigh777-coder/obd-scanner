@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OBD Сканер</string>
+    <string name="app_version">Версия %1$s</string>
+    <string name="common_dash">—</string>
+
+    <!-- Вкладки -->
+    <string name="tab_connect">Связь</string>
+    <string name="tab_dashboard">Приборы</string>
+    <string name="tab_dtc">Ошибки</string>
+    <string name="tab_vehicle">Авто</string>
+    <string name="tab_trip">Поездка</string>
+
+    <!-- Экран подключения -->
+    <string name="connect_title">Подключение</string>
+    <string name="connect_intro">Вставьте адаптер ELM327 в диагностический разъём OBD-II (как правило, под рулевой колонкой) и включите зажигание. Двигатель запускать не обязательно, но обороты, расход воздуха и температуру покажет только работающий мотор.</string>
+    <string name="connect_source_bluetooth">Bluetooth</string>
+    <string name="connect_source_wifi">Wi-Fi</string>
+    <string name="connect_source_demo">Демо</string>
+    <string name="connect_bluetooth_hint">Сначала сопрягите адаптер в настройках Bluetooth телефона (обычный PIN — 1234 или 0000). Здесь показаны уже сопряжённые устройства: поиск новых требовал бы доступа к местоположению, а он для диагностики ни к чему.</string>
+    <string name="connect_wifi_hint">Адаптеры с Wi-Fi поднимают собственную сеть — подключитесь к ней в настройках телефона. Обычный адрес: 192.168.0.10, порт 35000.</string>
+    <string name="connect_demo_hint">Виртуальный автомобиль внутри приложения: все экраны работают без адаптера и без машины. Данные правдоподобные, но не настоящие.</string>
+    <string name="connect_bluetooth_off">Bluetooth выключен или устройство его не поддерживает</string>
+    <string name="connect_no_paired">Сопряжённых устройств нет. Сопрягите адаптер в настройках Bluetooth и вернитесь сюда.</string>
+    <string name="connect_refresh">Обновить список</string>
+    <string name="connect_permission_title">Нужно разрешение на Bluetooth</string>
+    <string name="connect_permission_text">Android 12 и новее требует отдельного разрешения, чтобы приложение могло соединяться с сопряжёнными устройствами.</string>
+    <string name="connect_permission_grant">Разрешить</string>
+    <string name="connect_host">Адрес</string>
+    <string name="connect_port">Порт</string>
+    <string name="connect_button">Подключиться</string>
+    <string name="connect_disconnect">Отключиться</string>
+    <string name="connect_connecting">Подключение…</string>
+    <string name="connect_state_connected">Связь есть</string>
+    <string name="connect_state_disconnected">Нет связи</string>
+    <string name="connect_lost">Связь с адаптером потеряна: адаптер вынут, зажигание выключено или шина замолчала.</string>
+    <string name="connect_adapter">Адаптер</string>
+    <string name="connect_protocol">Протокол</string>
+    <string name="connect_pid_count">Параметров поддерживается</string>
+    <string name="connect_settings">Настройки</string>
+    <string name="connect_poll_interval">Период опроса: %1$d мс</string>
+    <string name="connect_poll_hint">Чем короче период, тем живее стрелки. Дешёвые адаптеры на коротком периоде начинают терять ответы — если значения замирают, увеличьте.</string>
+    <string name="connect_units">Единицы измерения</string>
+    <string name="connect_units_metric">Метрические</string>
+    <string name="connect_units_imperial">Имперские</string>
+    <string name="connect_terminal">Терминал адаптера</string>
+    <string name="connect_terminal_hint">Команда напрямую адаптеру: ATI — версия, ATRV — напряжение, 010C — обороты. Ответ показывается как есть.</string>
+    <string name="connect_terminal_send">Отправить</string>
+    <string name="connect_terminal_command">Команда</string>
+
+    <!-- Приборы -->
+    <string name="dash_title">Приборы</string>
+    <string name="dash_offline">Нет связи с адаптером. Откройте вкладку «Связь» и подключитесь — или включите демо-режим, чтобы посмотреть приложение без машины.</string>
+    <string name="dash_waiting">Ждём первые данные…</string>
+    <string name="dash_mil_on">Горит Check Engine</string>
+    <string name="dash_mil_off">Check Engine не горит</string>
+    <string name="dash_dtc_count">Сохранённых ошибок: %1$d</string>
+    <string name="dash_choose">Выбрать параметры</string>
+    <string name="dash_choose_title">Что показывать на приборах</string>
+    <string name="dash_choose_hint">В списке только то, что отдаёт эта машина. Остальные параметры стандарта она не поддерживает.</string>
+    <string name="dash_consumption">Расход</string>
+    <string name="dash_close">Закрыть</string>
+
+    <!-- Ошибки -->
+    <string name="dtc_title">Ошибки</string>
+    <string name="dtc_read">Считать ошибки</string>
+    <string name="dtc_reading">Читаем…</string>
+    <string name="dtc_none">Ошибок нет: ЭБУ не сохранил ни одного кода.</string>
+    <string name="dtc_group_stored">Сохранённые</string>
+    <string name="dtc_group_pending">Ожидающие подтверждения</string>
+    <string name="dtc_group_permanent">Постоянные</string>
+    <string name="dtc_pending_hint">ЭБУ заметил неисправность, но ждёт повторения — лампа ещё не горит.</string>
+    <string name="dtc_permanent_hint">Такие коды вручную не стираются: ЭБУ погасит их сам, когда несколько поездок пройдут без неисправности.</string>
+    <string name="dtc_manufacturer_note">Код производителя: точное значение зависит от марки.</string>
+    <string name="dtc_clear">Сбросить ошибки</string>
+    <string name="dtc_clear_title">Сбросить ошибки?</string>
+    <string name="dtc_clear_text">Сброс погасит лампу Check Engine и стёрет сохранённые коды вместе со стоп-кадром, но не устранит причину: если неисправность осталась, код вернётся через одну-две поездки.\n\nЗаодно обнулится готовность бортовых тестов — какое-то время машину не примут на техосмотр, пока ЭБУ не прогонит их заново.</string>
+    <string name="dtc_clear_confirm">Сбросить</string>
+    <string name="dtc_cancel">Отмена</string>
+    <string name="dtc_cleared">Ошибки сброшены</string>
+    <string name="dtc_clear_failed">ЭБУ не принял команду сброса</string>
+    <string name="dtc_freeze_title">Стоп-кадр</string>
+    <string name="dtc_freeze_hint">Что было с двигателем в момент, когда ЭБУ записал ошибку.</string>
+    <string name="dtc_monitors_title">Бортовые тесты</string>
+    <string name="dtc_monitors_ready">Все тесты пройдены — к техосмотру готово</string>
+    <string name="dtc_monitors_not_ready">Не завершено тестов: %1$d</string>
+    <string name="dtc_monitor_complete">пройден</string>
+    <string name="dtc_monitor_incomplete">не завершён</string>
+
+    <!-- Автомобиль -->
+    <string name="vehicle_title">Автомобиль</string>
+    <string name="vehicle_refresh">Обновить</string>
+    <string name="vehicle_vin">VIN</string>
+    <string name="vehicle_vin_unavailable">Эта машина не отдаёт VIN: режим 09 поддерживают не все ЭБУ.</string>
+    <string name="vehicle_copy_vin">Скопировать VIN</string>
+    <string name="vehicle_copied">VIN скопирован</string>
+    <string name="vehicle_country">Страна сборки</string>
+    <string name="vehicle_manufacturer">Производитель</string>
+    <string name="vehicle_year">Модельный год</string>
+    <string name="vehicle_year_hint">Определён по 10-му символу VIN. Код года повторяется каждые 30 лет, поэтому для машин 1980-х возможна ошибка на цикл.</string>
+    <string name="vehicle_serial">Серийный номер</string>
+    <string name="vehicle_check_ok">Контрольный разряд VIN сходится</string>
+    <string name="vehicle_check_bad">Контрольный разряд VIN не сходится — VIN прочитан с ошибкой</string>
+    <string name="vehicle_check_na">Контрольный разряд в этом VIN не предусмотрен (он обязателен только для Северной Америки)</string>
+    <string name="vehicle_ecu">Блок управления</string>
+    <string name="vehicle_calibration">Калибровка прошивки</string>
+    <string name="vehicle_protocol">Протокол шины</string>
+    <string name="vehicle_adapter">Адаптер</string>
+    <string name="vehicle_voltage">Напряжение на разъёме</string>
+    <string name="vehicle_standard">Стандарт диагностики</string>
+    <string name="vehicle_fuel">Тип топлива</string>
+    <string name="vehicle_counters">Счётчики</string>
+    <string name="vehicle_unknown">Машина не ответила</string>
+
+    <!-- Поездка -->
+    <string name="trip_title">Поездка</string>
+    <string name="trip_start">Начать запись</string>
+    <string name="trip_stop">Остановить запись</string>
+    <string name="trip_recording">Идёт запись</string>
+    <string name="trip_empty">Запись не начата. Данные пишутся, пока приложение подключено к адаптеру.</string>
+    <string name="trip_hint">Пробег и расход считаются по данным самой машины — скорости и расходу воздуха, без GPS. Расход по воздуху — оценка: на холодном двигателе и полном газу ЭБУ обогащает смесь, и настоящий расход выше расчётного.</string>
+    <string name="trip_duration">Время</string>
+    <string name="trip_distance">Пробег</string>
+    <string name="trip_max_speed">Максимальная скорость</string>
+    <string name="trip_avg_speed">Средняя в движении</string>
+    <string name="trip_idle">Простой</string>
+    <string name="trip_max_rpm">Максимальные обороты</string>
+    <string name="trip_max_coolant">Максимальная температура ОЖ</string>
+    <string name="trip_fuel">Израсходовано</string>
+    <string name="trip_consumption">Средний расход</string>
+    <string name="trip_samples">Замеров: %1$d</string>
+    <string name="trip_export">Сохранить CSV</string>
+    <string name="trip_exported">Сохранено в Download/ObdScanner</string>
+    <string name="trip_export_failed">Не удалось сохранить файл</string>
+    <string name="trip_exported_share">Файл готов. На Android 9 запись в папку загрузок потребовала бы отдельного разрешения — отправьте CSV себе кнопкой «Поделиться».</string>
+    <string name="trip_share">Поделиться</string>
+    <string name="trip_clear">Очистить</string>
+</resources>
