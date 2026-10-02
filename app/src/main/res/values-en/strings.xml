@@ -129,4 +129,80 @@
     <string name="trip_exported_share">The file is ready. On Android 9 writing to the Downloads folder would need an extra permission — send the CSV to yourself with Share.</string>
     <string name="trip_share">Share</string>
     <string name="trip_clear">Clear</string>
+
+    <string name="connect_paired">Paired</string>
+    <string name="connect_found">Found over the air</string>
+    <string name="connect_ble_scan">Scan for BLE adapters</string>
+    <string name="connect_ble_scanning">Scanning…</string>
+    <string name="connect_ble_stop">Stop scanning</string>
+    <string name="connect_ble_hint">BLE adapters (Bluetooth 4.0 and newer) usually are not paired in advance and do not show up in the paired list - scanning finds them. A classic ELM327, in contrast, has to be paired once in the phone settings.</string>
+    <string name="connect_no_ble">This phone has no Bluetooth Low Energy</string>
+    <string name="connect_location_title">Android asks for location permission</string>
+    <string name="connect_location_text">On Android 8–11 the system cannot scan for BLE devices without precise location access: Bluetooth beacons can reveal where you are. The app does not need, read or send your location.</string>
+    <string name="connect_auto_reconnect">Reconnect automatically</string>
+    <string name="connect_auto_reconnect_hint">If the link drops (ignition off, you walked away), the app retries on its own - up to three times.</string>
+    <string name="connect_reconnecting">Reconnecting, attempt %1$d…</string>
+    <string name="connect_gauge_style">Gauge style</string>
+    <string name="gauge_style_dial">Dials</string>
+    <string name="gauge_style_bar">Bars</string>
+    <string name="gauge_style_digital">Numbers</string>
+    <string name="link_classic">classic</string>
+    <string name="link_ble">BLE</string>
+
+    <string name="dash_gear">Gear</string>
+    <string name="dash_gear_learning">Gears are learned while driving: %1$d so far</string>
+    <string name="dash_range">Range</string>
+    <string name="dash_custom">Custom parameters</string>
+
+    <string name="tab_measure">Runs</string>
+    <string name="measure_title">Measurements</string>
+    <string name="measure_tab_trip">Trip</string>
+    <string name="measure_tab_accel">Acceleration</string>
+    <string name="perf_hint">Acceleration and braking are measured automatically from vehicle data. Bus speed arrives as whole km/h a few times per second - enough to compare your own runs, not to argue with the brochure.</string>
+    <string name="perf_waiting">Come to a stop and pull away - the run starts by itself.</string>
+    <string name="perf_measuring">Measuring</string>
+    <string name="perf_runs">Runs</string>
+    <string name="perf_no_runs">No runs yet.</string>
+    <string name="perf_braking">Braking</string>
+    <string name="perf_braking_item">%1$.0f km/h → 0: %2$.1f s, %3$.1f m</string>
+    <string name="perf_g_meter">Current acceleration</string>
+    <string name="perf_power">Power (estimate)</string>
+    <string name="perf_peak_power">Peak %1$.0f hp at %2$.0f km/h</string>
+    <string name="perf_power_hint">Power is derived from mass, acceleration and drag. Road gradient and wind are ignored and mass comes from the profile - so this is an estimate for comparing runs, not a dyno figure.</string>
+    <string name="perf_distance">Distance covered</string>
+    <string name="perf_max_speed">Top speed</string>
+    <string name="perf_peak_g">Peak acceleration</string>
+    <string name="perf_clear">Clear measurements</string>
+    <string name="perf_run_title">Run %1$d</string>
+
+    <string name="vehicle_profile">Vehicle profile</string>
+    <string name="vehicle_profile_hint">Range, power estimate and gauge scales depend on these numbers - the OBD-II bus does not report them. Set them once for your car.</string>
+    <string name="vehicle_tank">Tank, L</string>
+    <string name="vehicle_mass">Curb mass, kg</string>
+    <string name="vehicle_payload">People and cargo, kg</string>
+    <string name="vehicle_redline">Redline, rpm</string>
+    <string name="vehicle_tyre">Tyres</string>
+    <string name="vehicle_tyre_bad">Does not look like a tyre size - expected 245/70R16</string>
+    <string name="vehicle_profile_reset">Restore profile defaults</string>
+    <string name="vehicle_ecu_table">ECU code table %1$s: %2$d codes</string>
+    <string name="vehicle_sae_table">SAE catalogue: %1$d codes</string>
+    <string name="vehicle_speed_correction">Speedometer correction for these tyres: %1$s</string>
+    <string name="vehicle_engine">Engine</string>
+
+    <string name="custom_title">Custom parameters (PIDs)</string>
+    <string name="custom_hint">Manufacturers add their own parameters in service 22 - gearbox oil temperature, for instance. If you know the number and formula for your car, enter them and the parameter appears on the gauges. Service 01 is standard parameters, 22 is extended.</string>
+    <string name="custom_add">Add a parameter</string>
+    <string name="custom_name">Name</string>
+    <string name="custom_mode">Service</string>
+    <string name="custom_pid">PID number, hex</string>
+    <string name="custom_bytes">Bytes in reply</string>
+    <string name="custom_formula">Formula</string>
+    <string name="custom_unit">Unit</string>
+    <string name="custom_save">Save</string>
+    <string name="custom_delete">Delete</string>
+    <string name="custom_empty">Nothing added yet.</string>
+    <string name="custom_formula_help">In a formula A, B, C… are the reply bytes in order; + - * / and brackets are available. Example: (A*256+B)/4</string>
+    <string name="custom_invalid">Check the fields - the formula or PID number could not be parsed</string>
+
+    <string name="dtc_source_prefix">Source: %1$s</string>
 </resources>

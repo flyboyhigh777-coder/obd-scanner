@@ -1,8 +1,12 @@
 package com.obdscanner.app.data
 
 import android.content.Context
+import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.obd.UnitSystem
+import com.obdscanner.core.vehicle.TyreSize
+import com.obdscanner.core.vehicle.VehicleProfile
+import com.obdscanner.core.vehicle.VehicleProfiles
 
 /**
  * Настройки приложения в SharedPreferences. Их мало и они простые (период
@@ -35,6 +39,101 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_LAST_BT, null)
         set(value) = prefs.edit().putString(KEY_LAST_BT, value).apply()
 
+    /** Автоматически переподключаться, если связь с адаптером оборвалась. */
+    var autoReconnect: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RECONNECT, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECONNECT, value).apply()
+
+    /** Вид приборов: шкала, полоска или просто цифры. */
+    var gaugeStyle: String
+        get() = prefs.getString(KEY_GAUGE_STYLE, "DIAL") ?: "DIAL"
+        set(value) = prefs.edit().putString(KEY_GAUGE_STYLE, value).apply()
+
+    // --- профиль машины: берём готовый и правим под себя ---------------------
+
+    var profileId: String
+        get() = prefs.getString(KEY_PROFILE, VehicleProfiles.UAZ_PATRIOT_2016.id)
+            ?: VehicleProfiles.UAZ_PATRIOT_2016.id
+        set(value) = prefs.edit().putString(KEY_PROFILE, value).apply()
+
+    /**
+     * Профиль с поправками пользователя. Хранятся не все поля, а только те, что
+     * человек может знать про свою машину и что влияет на расчёты: бак, масса,
+     * шины, красная зона. Остальное (аэродинамика, сопротивление качению)
+     * остаётся из профиля - его всё равно негде взять точнее.
+     */
+    fun vehicleProfile(): VehicleProfile {
+        val base = VehicleProfiles.byId(profileId)
+        return base.copy(
+            tankLitres = prefs.getFloat(KEY_TANK, base.tankLitres.toFloat()).toDouble(),
+            curbMassKg = prefs.getFloat(KEY_MASS, base.curbMassKg.toFloat()).toDouble(),
+            payloadKg = prefs.getFloat(KEY_PAYLOAD, base.payloadKg.toFloat()).toDouble(),
+            rpmRedline = prefs.getFloat(KEY_REDLINE, base.rpmRedline.toFloat()).toDouble(),
+            tyre = prefs.getString(KEY_TYRE, null)?.let { TyreSize.parse(it) } ?: base.tyre
+        )
+    }
+
+    fun updateVehicleProfile(
+        tankLitres: Double? = null,
+        curbMassKg: Double? = null,
+        payloadKg: Double? = null,
+        rpmRedline: Double? = null,
+        tyreText: String? = null
+    ) {
+        prefs.edit().apply {
+            tankLitres?.let { putFloat(KEY_TANK, it.toFloat()) }
+            curbMassKg?.let { putFloat(KEY_MASS, it.toFloat()) }
+            payloadKg?.let { putFloat(KEY_PAYLOAD, it.toFloat()) }
+            rpmRedline?.let { putFloat(KEY_REDLINE, it.toFloat()) }
+            tyreText?.let { putString(KEY_TYRE, it) }
+        }.apply()
+    }
+
+    /** Сброс поправок к значениям профиля - на случай "я тут напутал". */
+    fun resetVehicleProfile() {
+        prefs.edit()
+            .remove(KEY_TANK).remove(KEY_MASS).remove(KEY_PAYLOAD)
+            .remove(KEY_REDLINE).remove(KEY_TYRE)
+            .apply()
+    }
+
+    // --- пользовательские PID ------------------------------------------------
+
+    /**
+     * Свои параметры хранятся строками "имя|режим|pid|байты|формула|единица|мин|макс|знаки".
+     * Разделитель - вертикальная черта: в формулах и названиях её не бывает, а
+     * JSON ради девяти полей тянул бы за собой разбор и его ошибки.
+     */
+    var customPids: List<CustomPid>
+        get() = (prefs.getStringSet(KEY_CUSTOM_PIDS, emptySet()) ?: emptySet())
+            .mapNotNull { decodeCustomPid(it) }
+            .sortedBy { it.name }
+        set(value) = prefs.edit()
+            .putStringSet(KEY_CUSTOM_PIDS, value.map { encodeCustomPid(it) }.toSet())
+            .apply()
+
+    private fun encodeCustomPid(pid: CustomPid): String = listOf(
+        pid.name.replace('|', '/'), pid.mode.toString(), pid.pid.toString(), pid.dataBytes.toString(),
+        pid.formulaText.replace('|', '/'), pid.unitLabel.replace('|', '/'),
+        pid.min.toString(), pid.max.toString(), pid.decimals.toString()
+    ).joinToString("|")
+
+    private fun decodeCustomPid(text: String): CustomPid? {
+        val parts = text.split('|')
+        if (parts.size < 9) return null
+        return CustomPid(
+            name = parts[0],
+            mode = parts[1].toIntOrNull() ?: return null,
+            pid = parts[2].toIntOrNull() ?: return null,
+            dataBytes = parts[3].toIntOrNull() ?: return null,
+            formulaText = parts[4],
+            unitLabel = parts[5],
+            min = parts[6].toDoubleOrNull() ?: 0.0,
+            max = parts[7].toDoubleOrNull() ?: 100.0,
+            decimals = parts[8].toIntOrNull() ?: 1
+        )
+    }
+
     /** Какие PID показывать на приборке. Пустой список - значит "набор по умолчанию". */
     var dashboardPids: List<Int>
         get() {
@@ -51,6 +150,15 @@ class AppSettings(context: Context) {
         const val KEY_WIFI_PORT = "wifi_port"
         const val KEY_LAST_BT = "last_bluetooth"
         const val KEY_DASH = "dashboard_pids"
+        const val KEY_AUTO_RECONNECT = "auto_reconnect"
+        const val KEY_GAUGE_STYLE = "gauge_style"
+        const val KEY_PROFILE = "vehicle_profile"
+        const val KEY_TANK = "tank_litres"
+        const val KEY_MASS = "curb_mass"
+        const val KEY_PAYLOAD = "payload"
+        const val KEY_REDLINE = "redline"
+        const val KEY_TYRE = "tyre"
+        const val KEY_CUSTOM_PIDS = "custom_pids"
 
         const val DEFAULT_POLL = 300
         const val MIN_POLL = 100

@@ -109,7 +109,13 @@ class DrivingModel {
  */
 class SimulatedEcu(
     val vin: String = "XTA210990G1234567",
-    val storedDtcs: MutableList<String> = mutableListOf("P0301", "P0171", "P0420"),
+    /**
+     * Сохранённые коды. P1513 здесь не случайно: это код производителя (цепь
+     * регулятора холостого хода на Bosch ME17.9.7), которого нет ни в одном
+     * обобщённом справочнике - то есть демо-режим сразу показывает и работу
+     * таблицы блока управления, и то, что ответ на такой код многокадровый.
+     */
+    val storedDtcs: MutableList<String> = mutableListOf("P0301", "P0171", "P0420", "P1513"),
     val pendingDtcs: MutableList<String> = mutableListOf("P0133"),
     val permanentDtcs: MutableList<String> = mutableListOf("P0420"),
     val ecuName: String = "ECM-EngineControl",

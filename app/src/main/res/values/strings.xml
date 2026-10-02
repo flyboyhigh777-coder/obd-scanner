@@ -135,4 +135,86 @@
     <string name="trip_exported_share">Файл готов. На Android 9 запись в папку загрузок потребовала бы отдельного разрешения — отправьте CSV себе кнопкой «Поделиться».</string>
     <string name="trip_share">Поделиться</string>
     <string name="trip_clear">Очистить</string>
+
+    <!-- Поиск адаптеров -->
+    <string name="connect_paired">Сопряжённые</string>
+    <string name="connect_found">Найденные по воздуху</string>
+    <string name="connect_ble_scan">Искать BLE-адаптеры</string>
+    <string name="connect_ble_scanning">Идёт поиск…</string>
+    <string name="connect_ble_stop">Остановить поиск</string>
+    <string name="connect_ble_hint">Адаптеры BLE (Bluetooth 4.0 и новее) обычно не сопрягаются заранее и в списке сопряжённых не видны - их находит поиск. Классический ELM327, наоборот, нужно один раз сопрячь в настройках телефона.</string>
+    <string name="connect_no_ble">Телефон не поддерживает Bluetooth Low Energy</string>
+    <string name="connect_location_title">Android просит разрешение на местоположение</string>
+    <string name="connect_location_text">На Android 8–11 поиск устройств BLE на уровне системы невозможен без доступа к точному местоположению: по Bluetooth-маячкам можно определять, где вы. Приложению геопозиция не нужна, оно её не читает и никуда не отправляет.</string>
+    <string name="connect_auto_reconnect">Переподключаться автоматически</string>
+    <string name="connect_auto_reconnect_hint">Если связь оборвалась (выключили зажигание, вышли из машины), приложение само попробует соединиться заново - до трёх раз.</string>
+    <string name="connect_reconnecting">Переподключение, попытка %1$d…</string>
+    <string name="connect_gauge_style">Вид приборов</string>
+    <string name="gauge_style_dial">Шкалы</string>
+    <string name="gauge_style_bar">Полоски</string>
+    <string name="gauge_style_digital">Цифры</string>
+    <string name="link_classic">классический</string>
+    <string name="link_ble">BLE</string>
+
+    <!-- Приборы: добавленное -->
+    <string name="dash_gear">Передача</string>
+    <string name="dash_gear_learning">Передачи распознаются на ходу: выучено %1$d</string>
+    <string name="dash_range">Запас хода</string>
+    <string name="dash_custom">Свои параметры</string>
+
+    <!-- Замеры -->
+    <string name="tab_measure">Замеры</string>
+    <string name="measure_title">Замеры</string>
+    <string name="measure_tab_trip">Поездка</string>
+    <string name="measure_tab_accel">Разгон</string>
+    <string name="perf_hint">Разгон и торможение замеряются сами, по данным машины. Скорость с шины приходит целыми км/ч и несколько раз в секунду - этого достаточно, чтобы сравнивать свои заезды между собой, но не для спора с паспортными цифрами.</string>
+    <string name="perf_waiting">Остановитесь и тронтесь с места - замер начнётся сам.</string>
+    <string name="perf_measuring">Идёт замер</string>
+    <string name="perf_runs">Заезды</string>
+    <string name="perf_no_runs">Заездов пока нет.</string>
+    <string name="perf_braking">Торможения</string>
+    <string name="perf_braking_item">%1$.0f км/ч → 0: %2$.1f с, %3$.1f м</string>
+    <string name="perf_g_meter">Ускорение сейчас</string>
+    <string name="perf_power">Мощность (оценка)</string>
+    <string name="perf_peak_power">Пик %1$.0f л.с. при %2$.0f км/ч</string>
+    <string name="perf_power_hint">Мощность считается из массы, ускорения и сопротивления воздуха. Уклон дороги и ветер не учитываются, масса берётся из профиля - поэтому это оценка для сравнения заездов, а не замер на стенде.</string>
+    <string name="perf_distance">Путь за заезд</string>
+    <string name="perf_max_speed">Максимальная скорость</string>
+    <string name="perf_peak_g">Пиковое ускорение</string>
+    <string name="perf_clear">Очистить замеры</string>
+    <string name="perf_run_title">Заезд %1$d</string>
+
+    <!-- Профиль машины -->
+    <string name="vehicle_profile">Профиль машины</string>
+    <string name="vehicle_profile_hint">От этих чисел зависят запас хода, оценка мощности и шкалы приборов - шина OBD-II их не сообщает. Поправьте под свою машину один раз.</string>
+    <string name="vehicle_tank">Объём бака, л</string>
+    <string name="vehicle_mass">Снаряжённая масса, кг</string>
+    <string name="vehicle_payload">Люди и груз, кг</string>
+    <string name="vehicle_redline">Красная зона, об/мин</string>
+    <string name="vehicle_tyre">Шины</string>
+    <string name="vehicle_tyre_bad">Не похоже на типоразмер - ожидается вид 245/70R16</string>
+    <string name="vehicle_profile_reset">Вернуть значения профиля</string>
+    <string name="vehicle_ecu_table">Таблица кодов ЭБУ %1$s: %2$d кодов</string>
+    <string name="vehicle_sae_table">Справочник SAE: %1$d кодов</string>
+    <string name="vehicle_speed_correction">Поправка спидометра под шины: %1$s</string>
+    <string name="vehicle_engine">Двигатель</string>
+
+    <!-- Свои параметры -->
+    <string name="custom_title">Свои параметры (PID)</string>
+    <string name="custom_hint">Производители добавляют свои параметры в режиме 22 - например, температуру масла АКПП. Если для вашей машины известны номер и формула, впишите их, и параметр появится на приборах. Режим 01 - стандартные параметры, 22 - расширенные.</string>
+    <string name="custom_add">Добавить параметр</string>
+    <string name="custom_name">Название</string>
+    <string name="custom_mode">Режим</string>
+    <string name="custom_pid">Номер PID, hex</string>
+    <string name="custom_bytes">Байт в ответе</string>
+    <string name="custom_formula">Формула</string>
+    <string name="custom_unit">Единица</string>
+    <string name="custom_save">Сохранить</string>
+    <string name="custom_delete">Удалить</string>
+    <string name="custom_empty">Пока ничего не добавлено.</string>
+    <string name="custom_formula_help">В формуле A, B, C… - байты ответа по порядку; доступны + - * / и скобки. Пример: (A*256+B)/4</string>
+    <string name="custom_invalid">Проверьте поля - формула или номер PID не разобраны</string>
+
+    <!-- Источник расшифровки кода -->
+    <string name="dtc_source_prefix">Источник: %1$s</string>
 </resources>

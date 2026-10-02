@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       Bluetooth. С Android 12 (API 31) старые BLUETOOTH/BLUETOOTH_ADMIN заменены
-      на BLUETOOTH_CONNECT, который спрашивается в рантайме - поэтому старые
-      объявлены с maxSdkVersion="30".
-
-      BLUETOOTH_SCAN сознательно НЕ запрашивается: приложение работает только с
-      уже сопряжёнными адаптерами (их список отдаёт система без поиска), а поиск
-      новых устройств на Android требовал бы ещё и доступ к местоположению -
-      просить геопозицию ради диагностики машины неуместно. Сопряжение делается
-      один раз в настройках Bluetooth телефона.
+      на BLUETOOTH_CONNECT и BLUETOOTH_SCAN, которые спрашиваются в рантайме -
+      поэтому старые объявлены с maxSdkVersion="30".
     -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -20,6 +15,29 @@
         android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!--
+      Сканирование нужно для BLE-адаптеров: они, в отличие от классических
+      ELM327, обычно не сопрягаются заранее и в списке сопряжённых устройств не
+      видны. neverForLocation говорит системе, что по результатам поиска
+      местоположение не определяется - тогда на Android 12+ геопозиция не
+      спрашивается вовсе.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
+
+    <!--
+      На Android 8-11 сканирование BLE на уровне платформы невозможно без
+      разрешения на точное местоположение: так устроен Android, потому что по
+      Bluetooth-маячкам можно определять положение. Приложению геопозиция не
+      нужна, никуда не отправляется и спрашивается только при нажатии "искать
+      BLE" на этих версиях - отсюда maxSdkVersion="30".
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+
     <!-- Wi-Fi адаптеры ELM327 поднимают свою точку доступа: связь с ними - обычный TCP-сокет. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -27,6 +45,9 @@
     <!-- Приложение полезно и без Bluetooth (Wi-Fi адаптер, демо-режим). -->
     <uses-feature
         android:name="android.hardware.bluetooth"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
         android:required="false" />
 
     <application

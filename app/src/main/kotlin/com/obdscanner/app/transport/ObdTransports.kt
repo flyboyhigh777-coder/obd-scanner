@@ -15,9 +15,22 @@ import kotlin.math.min
 
 /** Куда подключаться. */
 sealed interface ConnectionTarget {
+    /** Классический Bluetooth (профиль последовательного порта). */
     data class Bluetooth(val address: String, val name: String) : ConnectionTarget
+
+    /** Bluetooth Low Energy: данные через характеристики GATT. */
+    data class BluetoothLe(val address: String, val name: String) : ConnectionTarget
+
     data class Wifi(val host: String, val port: Int) : ConnectionTarget
     data object Demo : ConnectionTarget
+
+    val title: String
+        get() = when (this) {
+            is Bluetooth -> name
+            is BluetoothLe -> "$name (BLE)"
+            is Wifi -> "$host:$port"
+            Demo -> "демо"
+        }
 }
 
 /**
@@ -45,10 +58,18 @@ class BluetoothObdChannel(private val device: BluetoothDevice) : ObdChannel {
             return
         } catch (first: IOException) {
             runCatching { created.close() }
-            // Клоны ELM327 нередко отвергают нормальное соединение по UUID, но
-            // пускают по прямому номеру канала. Метод скрытый, поэтому только
-            // через рефлексию - и только как вторая попытка, иначе на исправных
-            // адаптерах мы бы лезли в обход публичного API без причины.
+            // Дальше - две обходные попытки для клонов, по возрастанию
+            // сомнительности. Сначала соединение без шифрования: часть
+            // адаптеров не умеет сопряжение как положено и отвергает защищённый
+            // канал. Потом прямой номер RFCOMM-канала через скрытый метод -
+            // последнее средство, на исправном адаптере до него не доходит.
+            val insecure = runCatching {
+                device.createInsecureRfcommSocketToServiceRecord(SPP_UUID).also { it.connect() }
+            }.getOrNull()
+            if (insecure != null) {
+                attach(insecure)
+                return
+            }
             val fallback = openByChannelNumber() ?: throw first
             attach(fallback)
         }

@@ -16,7 +16,43 @@ import com.obdscanner.core.elm.ObdText
  * Таблица разбита на функции по системам: так её проще дополнять, и ни один
  * метод не растёт до предела в 64 КБ байт-кода, который есть у JVM.
  */
+/** Откуда взялась расшифровка - приложение показывает это рядом с текстом. */
+enum class DtcTextSource {
+    /** Русский справочник этого приложения. */
+    CURATED,
+
+    /** Таблица конкретного блока управления (коды производителя). */
+    MANUFACTURER,
+
+    /** Датасет обобщённых кодов SAE - текст английский. */
+    SAE_ENGLISH,
+
+    /** Описание семейства кодов: точной расшифровки нет. */
+    FAMILY,
+
+    /** Не удалось сказать ничего. */
+    NONE
+}
+
+/** Расшифровка кода вместе с её происхождением. */
+data class DtcDescription(val text: String, val source: DtcTextSource, val sourceNote: String? = null)
+
 object DtcCatalog {
+
+    /**
+     * Семейство блока управления выбранного профиля машины: включает таблицу
+     * кодов производителя (P1xxx), которых нет ни в одном обобщённом
+     * справочнике. Выставляется при выборе профиля на вкладке "Авто".
+     */
+    var manufacturerFamily: String? = null
+
+    /**
+     * Полный справочник обобщённых кодов SAE (9 533 кода) - он лежит в
+     * ресурсах приложения, а не в :core, потому что это полмегабайта данных, и
+     * читать их должен тот, у кого есть доступ к ассетам. :core обходится
+     * функцией "код -> английский заголовок" и ничего не знает про Android.
+     */
+    var saeFallback: ((String) -> String?)? = null
 
     private val TABLE: Map<String, Pair<String, String>> by lazy {
         buildMap {
@@ -437,17 +473,40 @@ object DtcCatalog {
         "P0453", "P0460", "P0461", "P0462", "P0463", "P0530", "P0532", "P0533", "P0645"
     )
 
-    fun describe(code: String): String {
+    /**
+     * Расшифровка по слоям, от самого надёжного к самому общему:
+     * свой русский справочник, таблица блока управления, обобщённый датасет
+     * SAE (по-английски) и, если ничего не нашлось, описание семейства кодов.
+     */
+    fun lookup(code: String): DtcDescription {
         val upper = code.uppercase()
-        TABLE[upper]?.let { return ObdText.pick(it.first, it.second) }
-        family(upper)?.let {
-            return ObdText.pick(
-                "${it.first}. Точной расшифровки этого кода в справочнике нет.",
-                "${it.second}. No exact description for this code in the catalogue."
+        TABLE[upper]?.let {
+            return DtcDescription(ObdText.pick(it.first, it.second), DtcTextSource.CURATED)
+        }
+        val manufacturer = ManufacturerDtc.table(manufacturerFamily)
+        manufacturer?.describe(upper)?.let {
+            return DtcDescription(it, DtcTextSource.MANUFACTURER, manufacturer.source)
+        }
+        saeFallback?.invoke(upper)?.let {
+            return DtcDescription(
+                it,
+                DtcTextSource.SAE_ENGLISH,
+                ObdText.pick("Описание SAE, на английском", "SAE description, in English")
             )
         }
-        return ObdText.pick("Неизвестный код", "Unknown code")
+        family(upper)?.let {
+            return DtcDescription(
+                ObdText.pick(
+                    "${it.first}. Точной расшифровки этого кода в справочнике нет.",
+                    "${it.second}. No exact description for this code in the catalogue."
+                ),
+                DtcTextSource.FAMILY
+            )
+        }
+        return DtcDescription(ObdText.pick("Неизвестный код", "Unknown code"), DtcTextSource.NONE)
     }
+
+    fun describe(code: String): String = lookup(code).text
 
     /** Короткое название группы - для заголовков и сортировки списка. */
     fun group(code: String): String {
@@ -465,7 +524,11 @@ object DtcCatalog {
     }
 
     /** Есть ли точная (не по семейству) расшифровка - показываем это в интерфейсе. */
-    fun hasExactDescription(code: String): Boolean = TABLE.containsKey(code.uppercase())
+    fun hasExactDescription(code: String): Boolean =
+        lookup(code).source in setOf(DtcTextSource.CURATED, DtcTextSource.MANUFACTURER, DtcTextSource.SAE_ENGLISH)
+
+    /** Сколько кодов знает выбранная таблица производителя. */
+    val manufacturerSize: Int get() = ManufacturerDtc.size(manufacturerFamily)
 
     /** Сколько кодов в справочнике - показывается в "О программе". */
     val size: Int get() = TABLE.size

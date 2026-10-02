@@ -41,8 +41,8 @@ import com.obdscanner.app.ui.theme.StatusDot
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 import com.obdscanner.core.dtc.Dtc
-import com.obdscanner.core.dtc.DtcCatalog
 import com.obdscanner.core.dtc.DtcSeverity
+import com.obdscanner.core.dtc.DtcTextSource
 import com.obdscanner.core.obd.Pids
 
 /**
@@ -184,11 +184,14 @@ private fun DtcRow(dtc: Dtc) {
             Text(dtc.code, style = MaterialTheme.typography.titleMedium, color = TextBright, fontWeight = FontWeight.Bold)
             Text(dtc.severity.title, style = MaterialTheme.typography.bodySmall, color = severityColor(dtc.severity))
         }
-        Text(dtc.description, style = MaterialTheme.typography.bodyMedium, color = TextBright)
+        val details = dtc.descriptionDetails
+        Text(details.text, style = MaterialTheme.typography.bodyMedium, color = TextBright)
         Text(dtc.group, style = MaterialTheme.typography.bodySmall, color = TextMuted)
-        // Если расшифровки в справочнике нет, прямо об этом говорим - иначе
-        // пользователь принял бы описание семейства за точный диагноз.
-        if (dtc.manufacturerSpecific || !DtcCatalog.hasExactDescription(dtc.code)) {
+        // Откуда взята расшифровка - важно: таблица блока управления и
+        // английский справочник SAE это не одно и то же, а описание семейства
+        // вообще не диагноз, и выдавать их за одно было бы обманом.
+        details.sourceNote?.let { Hint(stringResource(R.string.dtc_source_prefix, it)) }
+        if (details.source == DtcTextSource.FAMILY) {
             Hint(stringResource(R.string.dtc_manufacturer_note))
         }
     }

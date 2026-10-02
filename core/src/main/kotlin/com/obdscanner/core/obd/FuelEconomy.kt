@@ -41,6 +41,20 @@ object FuelEconomy {
         return speedKmh / litresPerHour
     }
 
+    /**
+     * Запас хода, км: сколько осталось в баке, поделить на расход.
+     *
+     * Датчик уровня топлива отдаёт проценты, а не литры, поэтому объём бака
+     * берётся из профиля машины - и ошибка в нём переносится в запас хода
+     * один в один. На бездорожье и при болтанке в баке показания датчика сами
+     * пляшут, так что запас хода - ориентир, а не обещание.
+     */
+    fun rangeKm(tankLitres: Double, levelPercent: Double, litresPer100Km: Double): Double? {
+        if (tankLitres <= 0 || levelPercent <= 0 || litresPer100Km <= 0.1) return null
+        val litresLeft = tankLitres * levelPercent / 100.0
+        return litresLeft / litresPer100Km * 100.0
+    }
+
     /** Мили на галлон (US) из л/100км. */
     fun mpgFromL100(l100: Double): Double? = if (l100 <= 0.0) null else 235.215 / l100
 }

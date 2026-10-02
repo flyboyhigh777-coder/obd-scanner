@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -139,3 +140,37 @@ fun ValueTile(
 }
 
 enum class Alert { NONE, WARNING, DANGER }
+
+/**
+ * Полоска вместо круглой шкалы: занимает меньше места по высоте, поэтому на
+ * экран влезает больше параметров. Та же величина, тот же цвет - другой способ
+ * показа, который кому-то читается быстрее.
+ */
+@Composable
+fun BarGauge(
+    title: String,
+    valueText: String,
+    fraction: Float?,
+    accent: Color = GaugeCyan,
+    modifier: Modifier = Modifier
+) {
+    Panel(modifier) {
+        Text(title, style = MaterialTheme.typography.bodySmall, color = TextMuted, maxLines = 1)
+        Text(valueText, style = MaterialTheme.typography.titleLarge, color = TextBright)
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+        ) {
+            val radius = androidx.compose.ui.geometry.CornerRadius(size.height / 2)
+            drawRoundRect(color = Color.White.copy(alpha = 0.12f), cornerRadius = radius)
+            if (fraction != null && fraction > 0f) {
+                drawRoundRect(
+                    color = accent,
+                    size = androidx.compose.ui.geometry.Size(size.width * fraction.coerceIn(0f, 1f), size.height),
+                    cornerRadius = radius
+                )
+            }
+        }
+    }
+}

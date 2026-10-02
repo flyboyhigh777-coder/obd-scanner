@@ -209,14 +209,22 @@ object ObdPayload {
      *   кадра". Для режима 01 длина фиксирована по PID, и обрезка по ней
      *   отсекает нули, которыми кадр добит до 8 байт.
      */
-    fun data(reply: ElmReply, service: Int, pid: Int? = null, expectedBytes: Int? = null): IntArray? {
+    fun data(reply: ElmReply, service: Int, pid: Int? = null, expectedBytes: Int? = null): IntArray? =
+        data(reply, service, if (pid == null) IntArray(0) else intArrayOf(pid), expectedBytes)
+
+    /**
+     * То же, но эхо PID может быть длиннее одного байта: в режиме 22
+     * (расширенные параметры производителя) номер параметра двухбайтный, и
+     * ответ выглядит как `62 11 48 xx yy`.
+     */
+    fun data(reply: ElmReply, service: Int, pidBytes: IntArray, expectedBytes: Int? = null): IntArray? {
         if (reply.isError) return null
         val answer = service + 0x40
         for (frame in frames(reply)) {
             for (i in frame.indices) {
                 if (frame[i] != answer) continue
-                if (pid != null && (i + 1 >= frame.size || frame[i + 1] != pid)) continue
-                val from = i + 1 + (if (pid == null) 0 else 1)
+                if (pidBytes.indices.any { k -> i + 1 + k >= frame.size || frame[i + 1 + k] != pidBytes[k] }) continue
+                val from = i + 1 + pidBytes.size
                 if (from > frame.size) continue
                 val tail = frame.copyOfRange(from, frame.size)
                 return if (expectedBytes != null && tail.size > expectedBytes) {

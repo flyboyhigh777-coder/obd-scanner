@@ -115,7 +115,7 @@ class ObdSessionTest {
         val (obd, _) = session()
         obd.connect()
         assertEquals(
-            listOf("P0301", "P0171", "P0420"),
+            listOf("P0301", "P0171", "P0420", "P1513"),
             obd.readDtcs(DtcSource.STORED).map { it.code }
         )
         assertEquals(listOf("P0133"), obd.readDtcs(DtcSource.PENDING).map { it.code })
@@ -141,7 +141,7 @@ class ObdSessionTest {
         obd.connect()
         val status = obd.readMonitorStatus()!!
         assertTrue(status.milOn)
-        assertEquals(3, status.dtcCount)
+        assertEquals(4, status.dtcCount)
         assertFalse(status.readyForInspection)
     }
 

@@ -53,6 +53,9 @@ data class Dtc(val code: String, val source: DtcSource = DtcSource.STORED) {
 
     val description: String get() = DtcCatalog.describe(code)
 
+    /** Описание вместе с тем, откуда оно взято (стандарт, таблица ЭБУ, датасет SAE). */
+    val descriptionDetails: DtcDescription get() = DtcCatalog.lookup(code)
+
     val severity: DtcSeverity get() = DtcCatalog.severity(code)
 
     /** Короткое название группы ("Пропуски зажигания", "Топливо и воздух"). */

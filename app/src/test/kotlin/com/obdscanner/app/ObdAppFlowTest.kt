@@ -10,6 +10,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.obdscanner.app.data.SaeDtcCatalogAsset
+import com.obdscanner.core.dtc.DtcTextSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -116,13 +118,20 @@ class ObdAppFlowTest {
         compose.onNodeWithText("Считать ошибки").performClick()
         pumpUntil(30_000, "чтение кодов ошибок") { vm.dtc.value.loaded }
         val dtc = vm.dtc.value
-        assertEquals(listOf("P0301", "P0171", "P0420"), dtc.stored.map { it.code })
+        assertEquals(listOf("P0301", "P0171", "P0420", "P1513"), dtc.stored.map { it.code })
         assertEquals(listOf("P0133"), dtc.pending.map { it.code })
         assertEquals(listOf("P0420"), dtc.permanent.map { it.code })
         assertTrue("стоп-кадр заполнен: ${dtc.freezeFrame}", dtc.freezeFrame.isNotEmpty())
         assertNotNull(dtc.monitor)
         // Расшифровка на русском должна быть видна на экране, а не только в коде.
         compose.onNodeWithText("P0301").assertExists()
+        compose.onNodeWithText("P1513").assertExists()
+        // P1513 - код производителя: он расшифровывается только таблицей ME17.9.7,
+        // которая подключается профилем "УАЗ Патриот". Если бы таблица не
+        // подключилась, здесь было бы описание семейства.
+        val uazCode = dtc.stored.first { it.code == "P1513" }
+        assertEquals(DtcTextSource.MANUFACTURER, uazCode.descriptionDetails.source)
+        assertTrue(uazCode.description, uazCode.description.contains("холостого хода"))
         shot("06_dtc_list")
         compose.onNodeWithText("Бортовые тесты").performScrollTo()
         shot("07_dtc_monitors")
@@ -153,8 +162,8 @@ class ObdAppFlowTest {
         compose.onNodeWithText("XTA210990G1234567").assertExists()
         shot("10_vehicle")
 
-        // Поездка: запись, итоги, выгрузка CSV.
-        openTab("Поездка")
+        // Поездка: запись, итоги, выгрузка CSV - теперь внутри вкладки "Замеры".
+        openTab("Замеры")
         shot("11_trip_empty")
         compose.onNodeWithText("Начать запись").performClick()
         pumpUntil(30_000, "замеры поездки") { vm.trip.value.stats.sampleCount >= 3 }
@@ -169,10 +178,35 @@ class ObdAppFlowTest {
         pumpUntil(20_000, "выгрузка CSV") { vm.trip.value.exportedUri != null }
         shot("13_trip_exported")
 
+        // Разгон: тот же поток данных, другой раздел.
+        compose.onNodeWithText("Разгон").performClick()
+        compose.waitForIdle()
+        shot("14_performance")
+        // Сами замеры привязаны ко времени (виртуальная машина первые секунды
+        // цикла стоит), поэтому здесь проверяется не результат заезда - он
+        // покрыт тестами :core - а что раздел живой: ускорение считается на
+        // каждом опросе, как только пришла скорость.
+        compose.onNodeWithText("Ускорение сейчас").assertExists()
+        assertTrue("ускорение конечно: ${vm.performance.value.currentG}", vm.performance.value.currentG.isFinite())
+
+        // Авто: профиль машины и справочники.
+        openTab("Авто")
+        pumpUntil(20_000, "данные автомобиля") { vm.vehicle.value.loaded }
+        assertEquals("uaz_patriot_2016", vm.profile.value.id)
+        assertEquals("Bosch ME17.9.7", vm.profile.value.ecuName)
+        // Справочник SAE лежит в ассетах - проверяем, что он реально собран и
+        // разобран, а не просто объявлен в сборке.
+        pumpUntil(20_000, "загрузку справочника SAE") { SaeDtcCatalogAsset.loaded }
+        assertEquals(9533, SaeDtcCatalogAsset.size)
+        // Название профиля есть и в заголовке, и на кнопке выбора - поэтому ищем
+        // по всем совпадениям, а не ровно одно.
+        assertTrue(compose.onAllNodesWithText("УАЗ Патриот 2016+").fetchSemanticsNodes().isNotEmpty())
+        shot("15_vehicle_profile")
+
         // Отключение возвращает экран связи в исходное состояние.
         openTab("Связь")
         compose.onNodeWithText("Отключиться").performScrollTo().performClick()
         pumpUntil(10_000, "разрыв связи") { vm.connection.value is ConnectionState.Disconnected }
-        shot("14_disconnected")
+        shot("16_disconnected")
     }
 }

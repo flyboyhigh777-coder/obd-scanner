@@ -9,6 +9,7 @@ import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdPayload
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.elm.ObdText
+import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.ObdPid
 import com.obdscanner.core.obd.PidSupport
@@ -202,6 +203,19 @@ class ObdSession(private val adapter: ElmAdapter) : Closeable {
             pid.decode(data)?.let { out[pid.id] = it }
         }
         return out
+    }
+
+    /**
+     * Чтение пользовательского параметра: режим 01 или 22 с формулой, которую
+     * вписал человек. Режим 22 стандартом описан, но НАБОР параметров в нём
+     * задаёт производитель, поэтому "нет данных" здесь - обычный ответ, а не
+     * признак поломки.
+     */
+    fun readCustom(pid: CustomPid): Double? {
+        if (!pid.valid) return null
+        val reply = adapter.request(pid.request, timeoutMillis = 2000)
+        val data = ObdPayload.data(reply, pid.mode, pid.echoBytes, pid.dataBytes) ?: return null
+        return pid.decode(data)
     }
 
     /** Напряжение на разъёме по версии самого адаптера (`AT RV`), в вольтах. */

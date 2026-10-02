@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.ConnectScreen
 import com.obdscanner.app.ui.DashboardScreen
 import com.obdscanner.app.ui.DtcScreen
-import com.obdscanner.app.ui.TripScreen
+import com.obdscanner.app.ui.MeasureScreen
 import com.obdscanner.app.ui.VehicleScreen
 import com.obdscanner.app.ui.theme.Carbon
 import com.obdscanner.app.ui.theme.CarbonDeep
@@ -43,8 +43,10 @@ import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 
 /**
- * Единственная Activity. Пять вкладок внизу, у всех общий [ObdViewModel]: связь
- * с машиной одна, и переключение вкладок не должно её рвать.
+ * Единственная Activity. Пять вкладок внизу: связь, приборы, замеры, ошибки и
+ * данные автомобиля. У всех общий [ObdViewModel] - связь с машиной одна, и
+ * переключение вкладок не должно её рвать, а замеры разгона не должны
+ * обнуляться от того, что человек заглянул в ошибки.
  */
 class MainActivity : ComponentActivity() {
 
@@ -69,9 +71,9 @@ class MainActivity : ComponentActivity() {
                                 when (tab) {
                                     0 -> ConnectScreen(viewModel)
                                     1 -> DashboardScreen(viewModel)
-                                    2 -> DtcScreen(viewModel)
-                                    3 -> VehicleScreen(viewModel)
-                                    else -> TripScreen(viewModel)
+                                    2 -> MeasureScreen(viewModel)
+                                    3 -> DtcScreen(viewModel)
+                                    else -> VehicleScreen(viewModel)
                                 }
                             }
                             NavigationBar(containerColor = PanelFill, contentColor = TextBright) {
@@ -92,22 +94,22 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = tab == 2,
                                     onClick = { tab = 2 },
-                                    icon = { WarningIcon() },
-                                    label = { Text(stringResource(R.string.tab_dtc)) },
+                                    icon = { RouteIcon() },
+                                    label = { Text(stringResource(R.string.tab_measure)) },
                                     colors = navColors()
                                 )
                                 NavigationBarItem(
                                     selected = tab == 3,
                                     onClick = { tab = 3 },
-                                    icon = { CarIcon() },
-                                    label = { Text(stringResource(R.string.tab_vehicle)) },
+                                    icon = { WarningIcon() },
+                                    label = { Text(stringResource(R.string.tab_dtc)) },
                                     colors = navColors()
                                 )
                                 NavigationBarItem(
                                     selected = tab == 4,
                                     onClick = { tab = 4 },
-                                    icon = { RouteIcon() },
-                                    label = { Text(stringResource(R.string.tab_trip)) },
+                                    icon = { CarIcon() },
+                                    label = { Text(stringResource(R.string.tab_vehicle)) },
                                     colors = navColors()
                                 )
                             }
