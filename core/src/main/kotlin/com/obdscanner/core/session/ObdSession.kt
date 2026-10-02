@@ -51,7 +51,15 @@ sealed interface ConnectOutcome {
  * очередь запросов и корутины живут в приложении, а здесь протокол, который
  * можно прогнать в обычном тесте против [com.obdscanner.core.sim.SimulatedEcu].
  */
-class ObdSession(private val adapter: ElmAdapter) : Closeable {
+class ObdSession(
+    private val adapter: ElmAdapter,
+    /**
+     * Какой протокол задать адаптеру. [ObdProtocol.AUTO] - пусть ищет сам;
+     * конкретный протокол экономит несколько секунд на подключении, а если он
+     * не подойдёт, [connect] всё равно откатится к автоопределению.
+     */
+    private val preferredProtocol: ObdProtocol = ObdProtocol.AUTO
+) : Closeable {
 
     var adapterId: String = ""
         private set
@@ -85,14 +93,26 @@ class ObdSession(private val adapter: ElmAdapter) : Closeable {
         for (command in listOf(Elm.ECHO_OFF, Elm.LINEFEEDS_OFF, Elm.SPACES_OFF, Elm.HEADERS_OFF)) {
             adapter.request(command, timeoutMillis = 1000)
         }
-        adapter.request(Elm.ADAPTIVE_TIMING_2, timeoutMillis = 1000)
-        adapter.request(Elm.PROTOCOL_AUTO, timeoutMillis = 1000)
+        // Адаптивный тайминг в обычном режиме, а не в агрессивном (ATAT2):
+        // клоны на агрессивном иногда обрывают ответ на середине, а выигрыш в
+        // скорости на фоне периода опроса незаметен.
+        adapter.request(Elm.ADAPTIVE_TIMING_1, timeoutMillis = 1000)
+        adapter.request(Elm.setProtocol(preferredProtocol), timeoutMillis = 1000)
 
         onStage(ConnectStage.PROTOCOL)
         // Первый запрос - он же поиск протокола. Одна повторная попытка: на части
         // машин первый запрос после ATZ уходит в пустоту, пока шина просыпается.
         var pidsReply = adapter.request(Elm.request(0x01, 0x00), timeoutMillis = 9000)
         if (pidsReply.isError || ObdPayload.data(pidsReply, 0x01, 0x00) == null) {
+            pidsReply = adapter.request(Elm.request(0x01, 0x00), timeoutMillis = 9000)
+        }
+        // Заданный вручную протокол может не подойти (не та машина, не тот
+        // адаптер) - тогда откатываемся к автоопределению, вместо того чтобы
+        // сказать "нет связи" и оставить человека наедине с настройкой.
+        if (preferredProtocol != ObdProtocol.AUTO &&
+            ObdPayload.data(pidsReply, 0x01, 0x00) == null
+        ) {
+            adapter.request(Elm.PROTOCOL_AUTO, timeoutMillis = 1000)
             pidsReply = adapter.request(Elm.request(0x01, 0x00), timeoutMillis = 9000)
         }
         val firstRange = ObdPayload.data(pidsReply, 0x01, 0x00, expectedBytes = 4)

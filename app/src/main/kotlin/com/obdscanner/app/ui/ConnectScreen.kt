@@ -3,6 +3,7 @@ package com.obdscanner.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +42,8 @@ import com.obdscanner.app.transport.BluetoothScanner
 import com.obdscanner.app.transport.ConnectionTarget
 import com.obdscanner.app.transport.DiscoveredDevice
 import com.obdscanner.app.transport.LinkKind
+import com.obdscanner.app.transport.WifiObdChannel
+import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GaugeRed
@@ -75,8 +80,13 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     val scanning by viewModel.scanning.collectAsState()
     val autoReconnect by viewModel.autoReconnect.collectAsState()
     val gaugeStyle by viewModel.gaugeStyle.collectAsState()
+    val protocol by viewModel.protocol.collectAsState()
+    val boundToWifi by viewModel.boundToWifi.collectAsState()
 
-    var source by remember { mutableStateOf(Source.BLUETOOTH) }
+    // Открываемся на том способе, которым подключались в прошлый раз.
+    var source by remember {
+        mutableStateOf(Source.entries.firstOrNull { it.name == viewModel.settings.lastSource } ?: Source.WIFI)
+    }
     var host by remember { mutableStateOf(viewModel.settings.wifiHost) }
     var port by remember { mutableStateOf(viewModel.settings.wifiPort.toString()) }
     var selected by remember { mutableStateOf<DiscoveredDevice?>(null) }
@@ -84,6 +94,7 @@ fun ConnectScreen(viewModel: ObdViewModel) {
         mutableStateOf(BluetoothScanner.hasPermissions(context, BluetoothScanner.connectPermissions))
     }
     var scanDenied by remember { mutableStateOf(false) }
+    var protocolPicker by remember { mutableStateOf(false) }
 
     val connectPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -153,6 +164,13 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             }
             (connection as? ConnectionState.Failed)?.let { Text(it.message, color = GaugeRed) }
             (connection as? ConnectionState.Connected)?.let { state ->
+                if (state.target is ConnectionTarget.Wifi) {
+                    when (boundToWifi) {
+                        true -> Text(stringResource(R.string.connect_wifi_bound), color = GaugeGreen)
+                        false -> Text(stringResource(R.string.connect_wifi_not_bound), color = GaugeAmber)
+                        null -> Unit
+                    }
+                }
                 InfoRow(stringResource(R.string.connect_adapter), state.adapterId.ifEmpty { "ELM327" })
                 InfoRow(
                     stringResource(R.string.connect_protocol),
@@ -230,6 +248,26 @@ fun ConnectScreen(viewModel: ObdViewModel) {
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                        Text(stringResource(R.string.connect_wifi_presets), color = TextBright)
+                        // Адрес у разных партий свой, а на корпусе его пишут редко -
+                        // проще дать выбор, чем отправлять искать в интернете,
+                        // которого в этот момент как раз может не быть.
+                        WifiObdChannel.KNOWN_ADDRESSES.chunked(2).forEach { pairs ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                pairs.forEach { (knownHost, knownPort) ->
+                                    SegmentButton(
+                                        text = "$knownHost:$knownPort",
+                                        selected = host == knownHost && port == knownPort.toString(),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        host = knownHost
+                                        port = knownPort.toString()
+                                    }
+                                }
+                                if (pairs.size == 1) Box(Modifier.weight(1f))
+                            }
+                        }
+                        Hint(stringResource(R.string.connect_wifi_mobile_hint))
                     }
 
                     Source.DEMO -> Hint(stringResource(R.string.connect_demo_hint))
@@ -237,6 +275,7 @@ fun ConnectScreen(viewModel: ObdViewModel) {
 
                 Button(
                     onClick = {
+                        viewModel.settings.lastSource = source.name
                         when (source) {
                             Source.DEMO -> viewModel.connect(ConnectionTarget.Demo)
                             Source.WIFI -> {
@@ -276,6 +315,12 @@ fun ConnectScreen(viewModel: ObdViewModel) {
                 )
             }
             Hint(stringResource(R.string.connect_auto_reconnect_hint))
+
+            Text(stringResource(R.string.connect_protocol_title), color = TextBright)
+            OutlinedButton(onClick = { protocolPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (ru()) protocol.ru else protocol.en, color = TextBright)
+            }
+            Hint(stringResource(R.string.connect_protocol_hint))
 
             Text(stringResource(R.string.connect_gauge_style), color = TextBright)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -319,6 +364,35 @@ fun ConnectScreen(viewModel: ObdViewModel) {
         if (connection is ConnectionState.Connected) {
             TerminalPanel(terminal, viewModel::sendTerminalCommand)
         }
+    }
+
+    if (protocolPicker) {
+        AlertDialog(
+            onDismissRequest = { protocolPicker = false },
+            title = { Text(stringResource(R.string.connect_protocol_choose)) },
+            text = {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ObdProtocol.entries.forEach { candidate ->
+                        SegmentButton(
+                            text = if (ru()) candidate.ru else candidate.en,
+                            selected = candidate == protocol,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            viewModel.setProtocol(candidate)
+                            protocolPicker = false
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { protocolPicker = false }) {
+                    Text(stringResource(R.string.dash_close))
+                }
+            }
+        )
     }
 }
 

@@ -3,6 +3,9 @@ package com.obdscanner.app.transport
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.obdscanner.core.session.ObdChannel
 import com.obdscanner.core.sim.SimulatedEcu
 import java.io.IOException
@@ -118,15 +121,37 @@ class BluetoothObdChannel(private val device: BluetoothDevice) : ObdChannel {
 /**
  * Адаптер по Wi-Fi: обычный TCP-сокет. Такие адаптеры поднимают свою точку
  * доступа и слушают порт (чаще всего 192.168.0.10:35000).
+ *
+ * Главная тонкость - не в сокете, а в маршрутизации. У сети адаптера нет
+ * интернета, и Android, увидев это, продолжает гонять трафик через мобильную
+ * сеть: сокет на 192.168.0.10 уходит "в оператора" и никуда не доходит. Именно
+ * поэтому в инструкциях к таким адаптерам пишут "отключите мобильный интернет".
+ * Отключать ничего не нужно: сокет можно привязать к конкретной сети до
+ * соединения - [bindToWifi] находит сеть Wi-Fi и привязывает сокет к ней.
+ * Мобильный интернет при этом продолжает работать для всего остального.
+ *
+ * Если привязать не удалось (нет разрешения, не нашлась сеть), соединение всё
+ * равно пробуется обычным способом - тогда остаётся старый способ: выключить
+ * мобильные данные руками.
  */
-class WifiObdChannel(private val host: String, private val port: Int) : ObdChannel {
+class WifiObdChannel(
+    private val host: String,
+    private val port: Int,
+    /** Нужен для привязки сокета к сети адаптера; без него привязки не будет. */
+    private val context: Context? = null
+) : ObdChannel {
 
     private var socket: Socket? = null
     private var input: InputStream? = null
     private var output: OutputStream? = null
 
+    /** Удалось ли привязать сокет к Wi-Fi - приложение показывает это подсказкой. */
+    var boundToWifi: Boolean = false
+        private set
+
     fun open() {
         val created = Socket()
+        boundToWifi = bindToWifi(created)
         created.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
         // Короткий таймаут - страховка: читаем мы через available(), но если
         // прошивка адаптера всё-таки заблокирует чтение, поток не повиснет.
@@ -135,6 +160,29 @@ class WifiObdChannel(private val host: String, private val port: Int) : ObdChann
         socket = created
         input = created.getInputStream()
         output = created.getOutputStream()
+    }
+
+    /**
+     * Привязывает ещё не подключённый сокет к сети Wi-Fi.
+     *
+     * Сеть ищется перебором, а не берётся как "активная": активной Android
+     * считает ту, через которую есть интернет, то есть как раз мобильную.
+     * getAllNetworks с Android 12 помечен устаревшим в пользу подписки на
+     * изменения сетей, но здесь нужен разовый поиск в момент подключения, и
+     * заводить ради него колбэк с его жизненным циклом - сложнее без выигрыша.
+     */
+    @Suppress("DEPRECATION")
+    private fun bindToWifi(socket: Socket): Boolean {
+        val ctx = context ?: return false
+        return runCatching {
+            val manager = ctx.getSystemService(ConnectivityManager::class.java) ?: return false
+            val wifi = manager.allNetworks.firstOrNull { network ->
+                manager.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            } ?: return false
+            wifi.bindSocket(socket)
+            true
+        }.getOrDefault(false)
     }
 
     override fun write(bytes: ByteArray) {
@@ -159,8 +207,22 @@ class WifiObdChannel(private val host: String, private val port: Int) : ObdChann
         input = null; output = null; socket = null
     }
 
-    private companion object {
-        const val CONNECT_TIMEOUT_MS = 5000
+    companion object {
+        private const val CONNECT_TIMEOUT_MS = 5000
+
+        /**
+         * Типовые адреса Wi-Fi адаптеров ELM327. Разные партии прошиты
+         * по-разному, а на корпусе адрес пишут редко - поэтому проще дать выбор,
+         * чем заставлять искать его в интернете (которого в этот момент как раз
+         * может не быть).
+         */
+        val KNOWN_ADDRESSES: List<Pair<String, Int>> = listOf(
+            "192.168.0.10" to 35000,
+            "192.168.0.11" to 35000,
+            "192.168.1.5" to 35000,
+            "192.168.4.1" to 35000,
+            "10.0.0.10" to 35000
+        )
     }
 }
 

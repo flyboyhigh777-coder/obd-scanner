@@ -204,6 +204,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private val _autoReconnect = MutableStateFlow(settings.autoReconnect)
     val autoReconnect: StateFlow<Boolean> = _autoReconnect.asStateFlow()
 
+    private val _protocol = MutableStateFlow(settings.protocol)
+    val protocol: StateFlow<ObdProtocol> = _protocol.asStateFlow()
+
+    /** Привязался ли сокет Wi-Fi к сети адаптера - показывается подсказкой. */
+    private val _boundToWifi = MutableStateFlow<Boolean?>(null)
+    val boundToWifi: StateFlow<Boolean?> = _boundToWifi.asStateFlow()
+
     // --- поиск адаптеров ----------------------------------------------------
 
     private val _pairedDevices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
@@ -291,6 +298,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         _dtc.value = DtcState()
         _vehicle.value = VehicleState()
         _terminal.value = emptyList()
+        _boundToWifi.value = null
         when (target) {
             is ConnectionTarget.Bluetooth -> settings.lastBluetoothAddress = target.address
             is ConnectionTarget.BluetoothLe -> settings.lastBluetoothAddress = target.address
@@ -345,6 +353,11 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoReconnect(enabled: Boolean) {
         settings.autoReconnect = enabled
         _autoReconnect.value = enabled
+    }
+
+    fun setProtocol(protocol: ObdProtocol) {
+        settings.protocol = protocol
+        _protocol.value = protocol
     }
 
     fun toggleDashboardPid(id: Int) {
@@ -471,7 +484,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             _connection.value = ConnectionState.Failed(error.message ?: error.javaClass.simpleName)
             return false
         }
-        val session = ObdSession(ElmAdapter(channel))
+        val session = ObdSession(ElmAdapter(channel), preferredProtocol = _protocol.value)
         var established = false
         try {
             when (val outcome = session.connect { stage ->
@@ -510,7 +523,16 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun openChannel(target: ConnectionTarget): ObdChannel = when (target) {
         is ConnectionTarget.Demo -> DemoObdChannel()
-        is ConnectionTarget.Wifi -> WifiObdChannel(target.host, target.port).also { it.open() }
+        is ConnectionTarget.Wifi -> WifiObdChannel(
+            target.host,
+            target.port,
+            context = getApplication<Application>()
+        ).also {
+            it.open()
+            // Если сокет не удалось привязать к сети адаптера, Android может
+            // гонять запросы через мобильную сеть - экран связи об этом скажет.
+            _boundToWifi.value = it.boundToWifi
+        }
         is ConnectionTarget.Bluetooth -> {
             val device = BluetoothScanner.findDevice(getApplication<Application>(), target.address)
                 ?: throw IllegalStateException("Адаптер ${target.name} не найден")

@@ -1,6 +1,7 @@
 package com.obdscanner.app.data
 
 import android.content.Context
+import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.obd.UnitSystem
@@ -34,6 +35,15 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_WIFI_PORT, DEFAULT_PORT)
         set(value) = prefs.edit().putInt(KEY_WIFI_PORT, value).apply()
 
+    /**
+     * Чем подключались в прошлый раз: Wi-Fi, классический Bluetooth, BLE или
+     * демо. Экран связи открывается сразу на нужном способе - у человека
+     * адаптер один и тот же, и выбирать его каждый раз незачем.
+     */
+    var lastSource: String
+        get() = prefs.getString(KEY_LAST_SOURCE, "WIFI") ?: "WIFI"
+        set(value) = prefs.edit().putString(KEY_LAST_SOURCE, value).apply()
+
     /** Последний адаптер - чтобы не искать его в списке каждый раз. */
     var lastBluetoothAddress: String?
         get() = prefs.getString(KEY_LAST_BT, null)
@@ -43,6 +53,16 @@ class AppSettings(context: Context) {
     var autoReconnect: Boolean
         get() = prefs.getBoolean(KEY_AUTO_RECONNECT, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_RECONNECT, value).apply()
+
+    /**
+     * Протокол шины, который задаётся адаптеру. Автоопределение работает всегда,
+     * но клоны ELM327 перебирают протоколы заново на каждом подключении - если
+     * протокол машины известен, несколько секунд экономятся на каждом запуске.
+     */
+    var protocol: ObdProtocol
+        get() = ObdProtocol.entries.firstOrNull { it.name == prefs.getString(KEY_PROTOCOL, null) }
+            ?: ObdProtocol.AUTO
+        set(value) = prefs.edit().putString(KEY_PROTOCOL, value.name).apply()
 
     /** Вид приборов: шкала, полоска или просто цифры. */
     var gaugeStyle: String
@@ -149,9 +169,11 @@ class AppSettings(context: Context) {
         const val KEY_WIFI_HOST = "wifi_host"
         const val KEY_WIFI_PORT = "wifi_port"
         const val KEY_LAST_BT = "last_bluetooth"
+        const val KEY_LAST_SOURCE = "last_source"
         const val KEY_DASH = "dashboard_pids"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"
         const val KEY_GAUGE_STYLE = "gauge_style"
+        const val KEY_PROTOCOL = "obd_protocol"
         const val KEY_PROFILE = "vehicle_profile"
         const val KEY_TANK = "tank_litres"
         const val KEY_MASS = "curb_mass"

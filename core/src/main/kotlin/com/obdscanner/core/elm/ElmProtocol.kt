@@ -50,8 +50,17 @@ object Elm {
     const val SPACES_OFF = "ATS0"
     const val HEADERS_OFF = "ATH0"
     const val HEADERS_ON = "ATH1"
+    const val ADAPTIVE_TIMING_1 = "ATAT1"
     const val ADAPTIVE_TIMING_2 = "ATAT2"
     const val PROTOCOL_AUTO = "ATSP0"
+
+    /**
+     * `AT SP n` - задать протокол принудительно. Нужно для клонов ELM327:
+     * автоопределение у них работает, но каждый раз заново перебирает
+     * протоколы, и первое подключение растягивается на несколько секунд. Если
+     * протокол машины известен, перебор не нужен.
+     */
+    fun setProtocol(protocol: ObdProtocol): String = "ATSP${protocol.elmCode}"
     const val DESCRIBE_PROTOCOL_NUMBER = "ATDPN"
     const val READ_VOLTAGE = "ATRV"
     const val DEVICE_DESCRIPTION = "ATI"
