@@ -29,7 +29,7 @@ object Format {
 
     /** Только число, без единицы - для больших цифр на шкале. */
     fun number(pid: ObdPid, raw: Double, system: UnitSystem): String {
-        val converted = UnitConversion.convert(raw, pid.unit, pid.decimals, system)
+        val converted = UnitConversion.convert(raw, pid.unit, system, pid.decimals)
         return number(converted.value, converted.decimals)
     }
 

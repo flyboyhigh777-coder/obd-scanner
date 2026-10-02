@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.obdscanner.app.data.AppSettings
 import com.obdscanner.app.data.ExportResult
 import com.obdscanner.app.data.TripExport
+import com.obdscanner.app.transport.BluetoothDevices
 import com.obdscanner.app.transport.BluetoothObdChannel
 import com.obdscanner.app.transport.ConnectionTarget
 import com.obdscanner.app.transport.DemoObdChannel
