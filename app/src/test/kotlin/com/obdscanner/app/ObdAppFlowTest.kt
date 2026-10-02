@@ -2,10 +2,10 @@ package com.obdscanner.app
 
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
@@ -43,9 +43,15 @@ class ObdAppFlowTest {
 
     private val outDir = File("build/outputs/roborazzi").apply { mkdirs() }
 
+    /**
+     * Снимок экрана. Берём ПОСЛЕДНИЙ корень дерева, а не единственный: диалог
+     * (подтверждение сброса ошибок) Compose рисует в отдельном окне, и пока он
+     * открыт, корней два - onRoot() на этом падает с "found 2 nodes". Последний
+     * корень - это и есть диалог, то есть ровно то, что должно попасть на снимок.
+     */
     private fun shot(name: String) {
         compose.waitForIdle()
-        compose.onRoot().captureRoboImage(File(outDir, "$name.png").path)
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage(File(outDir, "$name.png").path)
     }
 
     /**
