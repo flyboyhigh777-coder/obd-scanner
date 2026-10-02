@@ -55,6 +55,15 @@ android {
             it.maxHeapSize = "2g"
             it.systemProperty("robolectric.graphicsMode", "NATIVE")
             it.systemProperty("roborazzi.test.record", "true")
+            // Robolectric эмулирует ParcelFileDescriptor через рефлексию в приватное
+            // поле FileDescriptor.fd - это нужно при записи в Uri от MediaStore
+            // (выгрузка CSV в тесте). На JDK 17 модуль java.base закрыт по
+            // умолчанию, и без --add-opens тест падает с InaccessibleObjectException.
+            it.jvmArgs(
+                "--add-opens=java.base/java.io=ALL-UNNAMED",
+                "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                "--add-opens=java.base/java.util=ALL-UNNAMED"
+            )
             it.testLogging {
                 events("passed", "failed")
                 showStandardStreams = true
