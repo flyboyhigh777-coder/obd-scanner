@@ -18,6 +18,9 @@ import com.obdscanner.core.elm.ObdText
  */
 /** Откуда взялась расшифровка - приложение показывает это рядом с текстом. */
 enum class DtcTextSource {
+    /** Таблица из документации на конкретную машину - самый надёжный источник. */
+    DOCUMENTATION,
+
     /** Русский справочник этого приложения. */
     CURATED,
 
@@ -480,6 +483,15 @@ object DtcCatalog {
      */
     fun lookup(code: String): DtcDescription {
         val upper = code.uppercase()
+        // Документация на машину - первая: если человек принёс таблицу из
+        // руководства по ремонту, она точнее любого свода.
+        ManufacturerDtc.describeFromDocumentation(upper)?.let {
+            return DtcDescription(
+                it,
+                DtcTextSource.DOCUMENTATION,
+                ObdText.pick("Из документации на машину", "From the vehicle documentation")
+            )
+        }
         TABLE[upper]?.let {
             return DtcDescription(ObdText.pick(it.first, it.second), DtcTextSource.CURATED)
         }
@@ -524,8 +536,12 @@ object DtcCatalog {
     }
 
     /** Есть ли точная (не по семейству) расшифровка - показываем это в интерфейсе. */
-    fun hasExactDescription(code: String): Boolean =
-        lookup(code).source in setOf(DtcTextSource.CURATED, DtcTextSource.MANUFACTURER, DtcTextSource.SAE_ENGLISH)
+    fun hasExactDescription(code: String): Boolean = lookup(code).source in setOf(
+        DtcTextSource.DOCUMENTATION,
+        DtcTextSource.CURATED,
+        DtcTextSource.MANUFACTURER,
+        DtcTextSource.SAE_ENGLISH
+    )
 
     /** Сколько кодов знает выбранная таблица производителя. */
     val manufacturerSize: Int get() = ManufacturerDtc.size(manufacturerFamily)

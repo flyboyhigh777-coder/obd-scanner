@@ -213,4 +213,5 @@
     <string name="connect_protocol_title">Bus protocol</string>
     <string name="connect_protocol_hint">Auto-detect always works, but cheap adapters redo the search on every connection. A 2016+ Patriot uses CAN 11 bit / 500 kbit/s — naming it directly saves a few seconds. If it turns out wrong, the app falls back to auto-detect.</string>
     <string name="connect_protocol_choose">Choose a protocol</string>
+    <string name="vehicle_doc_table">From the vehicle documentation: %1$d codes</string>
 </resources>

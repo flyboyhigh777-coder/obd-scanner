@@ -124,6 +124,46 @@ object ManufacturerDtc {
 
     private val TABLES: Map<String, ManufacturerDtcTable> = mapOf(ME17_9_7.family to ME17_9_7)
 
+    /**
+     * Коды из документации на конкретную машину.
+     *
+     * Встроенная таблица выше - сводка по открытым описаниям контроллера, и она
+     * заведомо неполная. Документация на свою машину точнее, поэтому её коды
+     * кладутся отдельным файлом (`assets/dtc_me17_9_7.tsv` в приложении) и
+     * перебивают и сводку, и общий справочник: когда в руках руководство по
+     * ремонту, спорить с ним приложению незачем.
+     *
+     * Правится файлом, а не кодом: дописать строку в текстовый файл может любой,
+     * пересобирать приложение для этого не нужно.
+     */
+    var fromDocumentation: Map<String, String> = emptyMap()
+
+    fun describeFromDocumentation(code: String): String? = fromDocumentation[code.uppercase()]
+
+    /**
+     * Разбор файла с кодами: по строке на код, разделитель - табуляция.
+     * Строки, начинающиеся с `#`, и пустые пропускаются; лишние столбцы (скажем,
+     * английский перевод) игнорируются. Такой формат выбран, чтобы таблицу можно
+     * было собрать в любом редакторе или выгрузить из таблицы Excel.
+     */
+    fun parseDocumentationTable(text: String): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.trim()
+            if (line.isEmpty() || line.startsWith("#")) continue
+            val parts = line.split('\t', ';')
+            if (parts.size < 2) continue
+            val code = parts[0].trim().uppercase()
+            val description = parts[1].trim()
+            // Код неисправности - буква и четыре знака: P1513, U0100, C0035.
+            if (!CODE_PATTERN.matches(code) || description.isEmpty()) continue
+            out[code] = description
+        }
+        return out
+    }
+
+    private val CODE_PATTERN = Regex("^[PCBU][0-3][0-9A-F]{3}$")
+
     fun table(family: String?): ManufacturerDtcTable? = family?.let { TABLES[it] }
 
     /** Число кодов в таблице - показывается на экране "Авто". */

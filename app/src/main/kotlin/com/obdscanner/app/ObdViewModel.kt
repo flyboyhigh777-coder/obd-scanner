@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdscanner.app.data.AppSettings
 import com.obdscanner.app.data.ExportResult
+import com.obdscanner.app.data.ManufacturerDtcAsset
 import com.obdscanner.app.data.SaeDtcCatalogAsset
 import com.obdscanner.app.data.TripExport
 import com.obdscanner.app.transport.BleObdChannel
@@ -246,8 +247,11 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         // Таблица кодов блока управления зависит от выбранной машины.
         DtcCatalog.manufacturerFamily = _profile.value.manufacturerDtcFamily
         dieselFuel = FuelType.isDiesel(_profile.value.fuelTypeCode)
-        // Справочник на 9.5 тысячи кодов читается с диска - только не на главном потоке.
-        viewModelScope.launch(Dispatchers.IO) { SaeDtcCatalogAsset.load(getApplication()) }
+        // Справочники читаются с диска - только не на главном потоке.
+        viewModelScope.launch(Dispatchers.IO) {
+            SaeDtcCatalogAsset.load(getApplication())
+            ManufacturerDtcAsset.load(getApplication())
+        }
     }
 
     /** Список сопряжённых устройств: обновляется при входе на экран связи. */
