@@ -55,6 +55,21 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_AUTO_RECONNECT, value).apply()
 
     /**
+     * Поправка к напряжению, которое сообщает адаптер, в вольтах.
+     *
+     * Клоны ELM327 врут по напряжению на одну-две десятых, а разница между
+     * "заряжена" и "подсажена" - как раз десятые. Человек меряет мультиметром
+     * на клеммах, вводит разницу один раз, и дальше оценка заряда честная.
+     * Предел в один вольт - защита от опечатки: больше это уже не поправка, а
+     * неисправный адаптер.
+     */
+    var voltageOffset: Float
+        get() = prefs.getFloat(KEY_VOLTAGE_OFFSET, 0f).coerceIn(-MAX_VOLTAGE_OFFSET, MAX_VOLTAGE_OFFSET)
+        set(value) = prefs.edit()
+            .putFloat(KEY_VOLTAGE_OFFSET, value.coerceIn(-MAX_VOLTAGE_OFFSET, MAX_VOLTAGE_OFFSET))
+            .apply()
+
+    /**
      * Протокол шины, который задаётся адаптеру. Автоопределение работает всегда,
      * но клоны ELM327 перебирают протоколы заново на каждом подключении - если
      * протокол машины известен, несколько секунд экономятся на каждом запуске.
@@ -172,6 +187,8 @@ class AppSettings(context: Context) {
         const val KEY_LAST_SOURCE = "last_source"
         const val KEY_DASH = "dashboard_pids"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"
+        const val KEY_VOLTAGE_OFFSET = "voltage_offset"
+        const val MAX_VOLTAGE_OFFSET = 1.0f
         const val KEY_GAUGE_STYLE = "gauge_style"
         const val KEY_PROTOCOL = "obd_protocol"
         const val KEY_PROFILE = "vehicle_profile"

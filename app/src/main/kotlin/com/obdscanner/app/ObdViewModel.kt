@@ -17,6 +17,10 @@ import com.obdscanner.app.transport.DiscoveredDevice
 import com.obdscanner.app.transport.DemoObdChannel
 import com.obdscanner.app.transport.WifiObdChannel
 import com.obdscanner.core.dtc.Dtc
+import com.obdscanner.core.electrical.Battery
+import com.obdscanner.core.electrical.BatteryMonitor
+import com.obdscanner.core.electrical.BatteryVerdict
+import com.obdscanner.core.electrical.CrankingResult
 import com.obdscanner.core.dtc.DtcCatalog
 import com.obdscanner.core.dtc.DtcSource
 import com.obdscanner.core.elm.ElmReply
@@ -90,6 +94,29 @@ data class LiveSnapshot(
 }
 
 /** Ошибки: три режима чтения, стоп-кадр и бортовые тесты. */
+/**
+ * Бортовая сеть.
+ *
+ * Тока здесь нет и быть не может: в OBD-II нет ни одного параметра с током, а
+ * косвенно его не вытащить - разрешение ATRV (0.1 В) на два порядка грубее,
+ * чем след, который оставляет на напряжении даже большая утечка. Подробный
+ * расчёт - в :core, Battery.kt. Поэтому здесь только то, что напряжение
+ * действительно показывает: заряд, пуск и работа генератора.
+ */
+data class BatteryState(
+    val volts: Double? = null,
+    /** true - значение от адаптера (AT RV), false - из ЭБУ (PID 42). */
+    val fromAdapter: Boolean = true,
+    val verdict: BatteryVerdict = BatteryVerdict.UNKNOWN,
+    val chargePercent: Int? = null,
+    val minVolts: Double? = null,
+    val maxVolts: Double? = null,
+    val cranking: CrankingResult? = null,
+    val crankTestActive: Boolean = false,
+    /** Последние замеры для графика, в порядке поступления. */
+    val history: List<Double> = emptyList(),
+)
+
 data class DtcState(
     val reading: Boolean = false,
     val loaded: Boolean = false,
@@ -139,6 +166,7 @@ private sealed interface ObdTask {
     data object ReadDtcs : ObdTask
     data object ClearDtcs : ObdTask
     data object RefreshVehicle : ObdTask
+    data object CrankTest : ObdTask
     data class Terminal(val command: String) : ObdTask
 }
 
@@ -167,6 +195,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _dtc = MutableStateFlow(DtcState())
     val dtc: StateFlow<DtcState> = _dtc.asStateFlow()
+
+    private val _battery = MutableStateFlow(BatteryState())
+    val battery: StateFlow<BatteryState> = _battery.asStateFlow()
 
     /**
      * Меняется при каждой правке своих расшифровок. Нужен только для того,
@@ -243,6 +274,19 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      * выгрузке - отсюда блокировка.
      */
     private val recorder = TripRecorder()
+
+    private val battery = BatteryMonitor()
+
+    /**
+     * Поправка к показаниям адаптера. Клоны ELM327 врут по напряжению на
+     * десятые доли вольта, а разница между "заряжена" и "подсажена" - как раз
+     * десятые. Человек меряет мультиметром и вводит разницу один раз.
+     */
+    @Volatile
+    private var voltageOffset = 0.0
+
+    @Volatile
+    private var crankTestRunning = false
     private val recorderLock = Any()
 
     @Volatile private var recording = false
@@ -252,6 +296,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private var gears = GearEstimator()
 
     init {
+        voltageOffset = settings.voltageOffset.toDouble()
         // Таблица кодов блока управления зависит от выбранной машины.
         DtcCatalog.manufacturerFamily = _profile.value.manufacturerDtcFamily
         dieselFuel = FuelType.isDiesel(_profile.value.fuelTypeCode)
@@ -633,6 +678,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 emptyCycles = 0
             }
+            readBatteryVoltage(session, values[Pids.RPM.id])
             val custom = readCustomPids(session)
             // Статус лампы Check Engine меняется редко - спрашиваем его не каждый
             // цикл, чтобы не отнимать время у приборов.
@@ -652,6 +698,104 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         }
         return out
     }
+
+    /**
+     * Напряжение бортовой сети.
+     *
+     * Сначала спрашиваем адаптер (`AT RV`): он меряет прямо на разъёме, то
+     * есть практически на батарее, и отвечает даже при выключенном зажигании -
+     * когда ЭБУ уже молчит. PID 42 идёт запасным: это напряжение питания
+     * контроллера, оно чуть ниже из-за проводки, но лучше, чем ничего.
+     */
+    private fun readBatteryVoltage(session: ObdSession, rpm: Double?) {
+        val fromAdapter = session.adapterVoltage()
+        val volts = fromAdapter ?: session.read(Pids.CONTROL_MODULE_VOLTAGE)
+        if (volts == null) return
+        val corrected = volts + voltageOffset
+        // Обороты - лучший признак работы мотора, но их может не быть в опросе:
+        // набор приборов настраивается, и обороты из него можно убрать. Тогда
+        // судим по напряжению: столько держит только генератор. Разница
+        // принципиальная - 14 В при работающем моторе это норма, а при
+        // заглушенном такого напряжения просто не бывает.
+        val running = if (rpm != null) rpm >= Battery.RUNNING_RPM else corrected >= ALTERNATOR_VOLTS
+        battery.add(System.currentTimeMillis(), corrected, running)
+        publishBattery(fromAdapter = fromAdapter != null)
+    }
+
+    /**
+     * Тест пуска: быстрый опрос только напряжения.
+     *
+     * Прокрутка стартером длится меньше секунды, и на обычном периоде опроса
+     * (вместе со всеми приборами) провал проскакивает между замерами. Здесь
+     * ничего, кроме `AT RV`, не спрашивается, поэтому замеры идут раз в
+     * ~120 мс и провал виден целиком.
+     */
+    private suspend fun runCrankTest(session: ObdSession) {
+        crankTestRunning = true
+        battery.reset()
+        publishBattery(crankTestActive = true)
+        val deadline = System.currentTimeMillis() + CRANK_TEST_MILLIS
+        while (crankTestRunning &&
+            System.currentTimeMillis() < deadline &&
+            currentCoroutineContext().isActive
+        ) {
+            val volts = session.adapterVoltage()
+            if (volts != null) {
+                val corrected = volts + voltageOffset
+                // Обороты в этом режиме не опрашиваются, поэтому про работу
+                // мотора судим по напряжению: генератор поднимает сеть выше
+                // любого состояния покоя.
+                battery.add(System.currentTimeMillis(), corrected, corrected >= ALTERNATOR_VOLTS)
+                publishBattery(crankTestActive = true)
+                // Пуск состоялся и мотор работает - дальше ждать нечего.
+                if (battery.cranking != null && corrected >= ALTERNATOR_VOLTS) break
+            }
+            delay(CRANK_SAMPLE_MILLIS)
+        }
+        crankTestRunning = false
+        publishBattery(crankTestActive = false)
+    }
+
+    private fun publishBattery(
+        fromAdapter: Boolean = _battery.value.fromAdapter,
+        crankTestActive: Boolean = _battery.value.crankTestActive,
+    ) {
+        _battery.value = BatteryState(
+            volts = battery.last?.volts,
+            fromAdapter = fromAdapter,
+            verdict = battery.verdict(),
+            chargePercent = battery.restingChargePercent(),
+            minVolts = battery.minVolts,
+            maxVolts = battery.maxVolts,
+            cranking = battery.cranking,
+            crankTestActive = crankTestActive,
+            history = battery.samples.takeLast(VOLTAGE_HISTORY).map { it.volts },
+        )
+    }
+
+    /** Запускает тест пуска: нажать, потом поворачивать ключ. */
+    fun startCrankTest() {
+        if (crankTestRunning) return
+        tasks.trySend(ObdTask.CrankTest)
+    }
+
+    fun stopCrankTest() {
+        crankTestRunning = false
+    }
+
+    /** Сбрасывает минимум, максимум и результат пуска. */
+    fun resetBattery() {
+        battery.reset()
+        publishBattery(crankTestActive = false)
+    }
+
+    /** Поправка к показаниям адаптера, в вольтах. */
+    fun updateVoltageOffset(offset: Double) {
+        voltageOffset = offset
+        settings.voltageOffset = offset.toFloat()
+    }
+
+    val voltageCalibration: Double get() = voltageOffset
 
     private fun publish(values: Map<Int, Double>, custom: Map<String, Double>, monitor: MonitorStatus?) {
         val now = System.currentTimeMillis()
@@ -725,7 +869,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         return ids.mapNotNull { Pids.byId[it] }.filter { session.supports(it.id) && it.id !in Pids.STATIC }
     }
 
-    private fun handle(task: ObdTask, session: ObdSession) {
+    private suspend fun handle(task: ObdTask, session: ObdSession) {
         when (task) {
             ObdTask.ReadDtcs -> {
                 val stored = session.readDtcs(DtcSource.STORED)
@@ -770,6 +914,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             ObdTask.RefreshVehicle -> loadVehicle(session)
+
+            ObdTask.CrankTest -> runCrankTest(session)
 
             is ObdTask.Terminal -> {
                 val reply: ElmReply = session.raw(task.command)
@@ -832,6 +978,18 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Сколько секунд искать BLE-адаптеры, прежде чем выключить сканер. */
         const val SCAN_SECONDS = 20
+
+        /** Сколько ждать пуска после нажатия кнопки теста. */
+        const val CRANK_TEST_MILLIS = 40_000L
+
+        /** Период опроса напряжения во время теста пуска. */
+        const val CRANK_SAMPLE_MILLIS = 120L
+
+        /** Выше этого напряжения сеть держит генератор, а не батарея. */
+        const val ALTERNATOR_VOLTS = 13.2
+
+        /** Сколько последних замеров напряжения держать для графика. */
+        const val VOLTAGE_HISTORY = 240
         const val RECONNECT_DELAY_MILLIS = 2500L
 
         /** Что показывать в стоп-кадре - то же, что обычно смотрят по ошибке. */

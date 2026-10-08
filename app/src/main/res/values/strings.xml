@@ -241,4 +241,29 @@
     <string name="dtc_import_failed">В файле не нашлось ни одного кода. Нужен текстовый файл, по строке на код: P1513\tописание</string>
     <string name="dtc_own_count">Своих расшифровок: %1$d</string>
     <string name="dtc_own_clear">Убрать все свои</string>
+    <string name="measure_tab_battery">Батарея</string>
+    <string name="battery_source_adapter">Напряжение с разъёма OBD-II (адаптер) — это практически напряжение на батарее.</string>
+    <string name="battery_source_ecu">Напряжение питания ЭБУ (PID 42) — адаптер своё не отдал. Оно чуть ниже, чем на клеммах.</string>
+    <string name="battery_charge">Заряд</string>
+    <string name="battery_charge_hint">По напряжению покоя. Честное значение — минут через 15–20 после остановки: сразу после поездки батарею держит поверхностный заряд, и она выглядит бодрее, чем есть.</string>
+    <string name="battery_min">Минимум за сессию</string>
+    <string name="battery_max">Максимум за сессию</string>
+    <string name="battery_reset">Сбросить минимум и максимум</string>
+    <string name="battery_crank_title">Тест пуска</string>
+    <string name="battery_crank_hint">Нажмите, потом поворачивайте ключ. Приложение перейдёт на частый опрос только напряжения и поймает просадку — обычный опрос её проскакивает, прокрутка длится меньше секунды. Это главный тест здоровья АКБ: ниже 9,6 В — батарея слаба или окислены клеммы.</string>
+    <string name="battery_crank_start">Начать тест пуска</string>
+    <string name="battery_crank_stop">Остановить</string>
+    <string name="battery_crank_waiting">Ждём пуск — поворачивайте ключ</string>
+    <string name="battery_crank_min">Минимум при прокрутке</string>
+    <string name="battery_crank_drop">Просадка</string>
+    <string name="battery_crank_duration">Длительность</string>
+    <string name="battery_current_title">Почему нет тока и потребления</string>
+    <string name="battery_current_text">Ток через OBD-II не читается: в стандарте SAE J1979 нет ни одного параметра с током — ни потребления, ни зарядного, ни утечки. ЭБУ двигателя его не измеряет, и ELM327 тоже: адаптер отдаёт только напряжение.
+
+Косвенно по напряжению тоже не выйдет. У батареи весь диапазон покоя — около 0,8 В на весь диапазон заряда, то есть один процент ≈ 0,008 В. Утечка 50 мА за час съедает у батареи 75 А·ч примерно 0,0005 В, даже утечка 3 А — около 0,03 В. Разрешение адаптера 0,1 В, это грубее в разы.
+
+Утечку ищут токовыми клещами или мультиметром в разрыв минусовой клеммы. Приложение это заменить не может и делать вид не будет.</string>
+    <string name="battery_calibration_title">Поправка напряжения</string>
+    <string name="battery_calibration_hint">Клоны ELM327 врут на одну-две десятых вольта, а разница между «заряжена» и «подсажена» — как раз десятые. Померьте мультиметром на клеммах и впишите разницу: например, если адаптер показывает 12,4, а мультиметр 12,6 — введите 0,2. Предел ±1 В.</string>
+    <string name="battery_calibration_label">Поправка, В</string>
 </resources>

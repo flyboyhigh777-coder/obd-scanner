@@ -228,4 +228,29 @@
     <string name="dtc_import_failed">No codes found in that file. It needs to be a text file with one code per line: P1513\tdescription</string>
     <string name="dtc_own_count">Own descriptions: %1$d</string>
     <string name="dtc_own_clear">Remove all of mine</string>
+    <string name="measure_tab_battery">Battery</string>
+    <string name="battery_source_adapter">Voltage at the OBD-II connector (adapter) — practically the voltage at the battery.</string>
+    <string name="battery_source_ecu">ECU supply voltage (PID 42) — the adapter did not report its own. It reads slightly lower than at the terminals.</string>
+    <string name="battery_charge">Charge</string>
+    <string name="battery_charge_hint">From the resting voltage. A fair reading comes 15–20 minutes after stopping: right after a drive the surface charge makes the battery look better than it is.</string>
+    <string name="battery_min">Session minimum</string>
+    <string name="battery_max">Session maximum</string>
+    <string name="battery_reset">Reset minimum and maximum</string>
+    <string name="battery_crank_title">Cranking test</string>
+    <string name="battery_crank_hint">Press this, then turn the key. The app switches to fast voltage-only polling and catches the dip — the normal poll misses it, cranking lasts under a second. This is the main battery health test: below 9.6 V the battery is weak or the terminals are corroded.</string>
+    <string name="battery_crank_start">Start cranking test</string>
+    <string name="battery_crank_stop">Stop</string>
+    <string name="battery_crank_waiting">Waiting for the start — turn the key</string>
+    <string name="battery_crank_min">Minimum while cranking</string>
+    <string name="battery_crank_drop">Dip</string>
+    <string name="battery_crank_duration">Duration</string>
+    <string name="battery_current_title">Why there is no current reading</string>
+    <string name="battery_current_text">Current cannot be read over OBD-II: SAE J1979 has no current parameter at all — not draw, not charge, not leakage. The engine ECU does not measure it, and neither does ELM327: the adapter only reports voltage.
+
+Deriving it from voltage does not work either. A battery's whole resting range is about 0.8 V across the whole charge range, so one percent ≈ 0.008 V. A 50 mA draw takes about 0.0005 V per hour out of a 75 Ah battery; even a 3 A draw is about 0.03 V. The adapter resolves 0.1 V — far coarser.
+
+Leakage is found with a clamp meter or a multimeter in series with the negative terminal. The app cannot replace that and will not pretend to.</string>
+    <string name="battery_calibration_title">Voltage correction</string>
+    <string name="battery_calibration_hint">ELM327 clones are off by a tenth or two of a volt, and the difference between "charged" and "low" is exactly tenths. Measure at the terminals with a multimeter and enter the difference: if the adapter shows 12.4 and the multimeter 12.6, enter 0.2. Limit ±1 V.</string>
+    <string name="battery_calibration_label">Correction, V</string>
 </resources>

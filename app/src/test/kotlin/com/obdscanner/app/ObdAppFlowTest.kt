@@ -13,9 +13,11 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.obdscanner.app.data.DocumentationDtc
 import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.core.dtc.Dtc
+import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.dtc.DtcTextSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -218,6 +220,22 @@ class ObdAppFlowTest {
         // каждом опросе, как только пришла скорость.
         compose.onNodeWithText("Ускорение сейчас").assertExists()
         assertTrue("ускорение конечно: ${vm.performance.value.currentG}", vm.performance.value.currentG.isFinite())
+
+        // Батарея: напряжение опрашивается в общем цикле, поэтому к этому
+        // моменту оно уже есть. Виртуальный мотор работает, значит сеть держит
+        // генератор - и оценка должна быть именно про генератор, а не про
+        // заряд батареи: это главная развилка во всей логике.
+        compose.onNodeWithText("Батарея").performClick()
+        compose.waitForIdle()
+        pumpUntil(20_000, "напряжение бортовой сети") { vm.battery.value.volts != null }
+        val volts = vm.battery.value.volts!!
+        assertTrue("напряжение правдоподобно: $volts", volts in 10.0..16.0)
+        assertEquals(BatteryVerdict.CHARGE_OK, vm.battery.value.verdict)
+        // При работающем моторе процент заряда бессмыслен и не показывается.
+        assertNull(vm.battery.value.chargePercent)
+        // Про ток приложение говорит прямо на экране, а не прячет в README.
+        compose.onNodeWithText("Почему нет тока и потребления").performScrollTo().assertExists()
+        shot("17_battery")
 
         // Авто: профиль машины и справочники.
         openTab("Авто")

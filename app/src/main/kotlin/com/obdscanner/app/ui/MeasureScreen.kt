@@ -71,8 +71,15 @@ fun MeasureScreen(viewModel: ObdViewModel) {
             SegmentButton(stringResource(R.string.measure_tab_accel), section == 1, Modifier.weight(1f)) {
                 section = 1
             }
+            SegmentButton(stringResource(R.string.measure_tab_battery), section == 2, Modifier.weight(1f)) {
+                section = 2
+            }
         }
-        if (section == 0) TripSection(viewModel) else AccelerationSection(viewModel)
+        when (section) {
+            0 -> TripSection(viewModel)
+            1 -> AccelerationSection(viewModel)
+            else -> BatterySection(viewModel)
+        }
     }
 }
 
