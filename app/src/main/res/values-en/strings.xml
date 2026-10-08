@@ -245,12 +245,8 @@
     <string name="battery_crank_drop">Dip</string>
     <string name="battery_crank_duration">Duration</string>
     <string name="battery_current_title">Why there is no current reading</string>
-    <string name="battery_current_text">Current cannot be read over OBD-II: SAE J1979 has no current parameter at all — not draw, not charge, not leakage. The engine ECU does not measure it, and neither does ELM327: the adapter only reports voltage.
-
-Deriving it from voltage does not work either. A battery's whole resting range is about 0.8 V across the whole charge range, so one percent ≈ 0.008 V. A 50 mA draw takes about 0.0005 V per hour out of a 75 Ah battery; even a 3 A draw is about 0.03 V. The adapter resolves 0.1 V — far coarser.
-
-Leakage is found with a clamp meter or a multimeter in series with the negative terminal. The app cannot replace that and will not pretend to.</string>
+    <string name="battery_current_text">Current cannot be read over OBD-II: SAE J1979 has no current parameter at all — not draw, not charge, not leakage. The engine ECU does not measure it, and neither does ELM327: the adapter only reports voltage.\n\nDeriving it from voltage does not work either. The whole resting range of a battery is about 0.8 V across its full charge, so one percent is about 0.008 V. A 50 mA draw takes roughly 0.0005 V per hour out of a 75 Ah battery; even a 3 A draw is about 0.03 V. The adapter resolves 0.1 V — far coarser.\n\nLeakage is found with a clamp meter or a multimeter in series with the negative terminal. The app cannot replace that and will not pretend to.</string>
     <string name="battery_calibration_title">Voltage correction</string>
-    <string name="battery_calibration_hint">ELM327 clones are off by a tenth or two of a volt, and the difference between "charged" and "low" is exactly tenths. Measure at the terminals with a multimeter and enter the difference: if the adapter shows 12.4 and the multimeter 12.6, enter 0.2. Limit ±1 V.</string>
+    <string name="battery_calibration_hint">ELM327 clones are off by a tenth or two of a volt, and the difference between \"charged\" and \"low\" is exactly tenths. Measure at the terminals with a multimeter and enter the difference: if the adapter shows 12.4 and the multimeter 12.6, enter 0.2. Limit ±1 V.</string>
     <string name="battery_calibration_label">Correction, V</string>
 </resources>

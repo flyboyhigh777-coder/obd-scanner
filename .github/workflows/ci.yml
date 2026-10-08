@@ -40,12 +40,20 @@ jobs:
             exit 1
           }
 
+      # Строковые ресурсы aapt проверяет уже в середине сборки, а ошибки в них
+      # (неэкранированный апостроф, настоящий перевод строки внутри строки)
+      # глазом не видны. Проверка занимает секунду и экономит целый прогон.
+      - name: Check string resources
+        run: python3 tools/check_strings.py
+
       - name: Build debug APK
         shell: bash
         run: |
           ./gradlew :app:assembleDebug 2>&1 | tee build.log || {
-            echo "=== ОШИБКИ КОМПИЛЯЦИИ (:app) ==="
-            grep -E "^e: " build.log | head -60
+            echo "=== ОШИБКИ СБОРКИ (:app) ==="
+            # Не только "e:" от Kotlin: ресурсы роняет aapt, и его сообщения
+            # выглядят иначе - на этом один прогон уже был потерян.
+            grep -E "^e: |error:|ERROR:|Failed to |FAILED$" build.log | head -60
             exit 1
           }
 
