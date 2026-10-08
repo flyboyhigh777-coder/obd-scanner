@@ -41,6 +41,21 @@ enum class BatteryVerdict(val ru: String, val en: String, val alarming: Boolean)
     val title: String get() = ObdText.pick(ru, en)
 }
 
+/**
+ * Насколько велик ток утечки - по меркам обычной машины.
+ *
+ * Сам ток приложение не меряет и измерить не может (см. комментарий выше);
+ * его приносят токовыми клещами или мультиметром в разрыв минусовой клеммы.
+ * Здесь только оценка принесённого числа и арифметика "на сколько хватит".
+ */
+enum class LeakVerdict(val ru: String, val en: String) {
+    NORMAL("В норме", "Normal"),
+    ELEVATED("Повышенная - стоит поискать", "Elevated - worth investigating"),
+    HIGH("Большая - машина сядет за считанные дни", "High - the battery will flatten in days");
+
+    val title: String get() = ObdText.pick(ru, en)
+}
+
 /** Насколько просела бортовая сеть при прокрутке стартером. */
 enum class CrankVerdict(val ru: String, val en: String) {
     GOOD("Батарея держит пуск хорошо", "Battery holds cranking well"),
@@ -129,6 +144,42 @@ object Battery {
 
     /** Обороты, выше которых считаем, что мотор работает, а не крутится стартером. */
     const val RUNNING_RPM = 400.0
+
+    /**
+     * Ниже этого заряда машина зимой уже может не завестись - до него и
+     * считаем "сколько простоит". Полный разряд брать нельзя: до него дело
+     * доходит уже после того, как человек остался без машины.
+     */
+    const val CRANK_FLOOR_PERCENT = 50
+
+    /**
+     * Обычная машина в покое потребляет десятки миллиампер: сигнализация,
+     * магнитола с памятью, блоки в спящем режиме. Пороги ориентировочные - на
+     * машине с несколькими дополнительными блоками норма будет выше.
+     */
+    fun leakVerdict(milliAmps: Double): LeakVerdict = when {
+        milliAmps <= 50.0 -> LeakVerdict.NORMAL
+        milliAmps <= 80.0 -> LeakVerdict.ELEVATED
+        else -> LeakVerdict.HIGH
+    }
+
+    /**
+     * Сколько суток машина простоит с известной утечкой, пока заряд не упадёт
+     * до [floorPercent]. Чистая арифметика по ёмкости - без температуры и
+     * саморазряда, поэтому в холод будет меньше.
+     */
+    fun daysUntilFlat(
+        batteryAh: Double,
+        chargePercent: Int,
+        milliAmps: Double,
+        floorPercent: Int = CRANK_FLOOR_PERCENT,
+    ): Double? {
+        if (batteryAh <= 0.0 || milliAmps <= 0.0) return null
+        val usableShare = (chargePercent - floorPercent).coerceAtLeast(0) / 100.0
+        if (usableShare <= 0.0) return 0.0
+        val hours = batteryAh * usableShare / (milliAmps / 1000.0)
+        return hours / 24.0
+    }
 }
 
 /**

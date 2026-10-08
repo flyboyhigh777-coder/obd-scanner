@@ -40,8 +40,10 @@ import com.obdscanner.app.ui.theme.PanelTitle
 import com.obdscanner.app.ui.theme.StatusDot
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
+import com.obdscanner.core.electrical.Battery
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.electrical.CrankVerdict
+import com.obdscanner.core.electrical.LeakVerdict
 import java.util.Locale
 
 /**
@@ -123,7 +125,56 @@ fun BatterySection(viewModel: ObdViewModel) {
         Hint(stringResource(R.string.battery_current_text))
     }
 
+    LeakCalculator(viewModel, battery.chargePercent)
+
     CalibrationPanel(viewModel)
+}
+
+/**
+ * Сколько машина простоит с известной утечкой.
+ *
+ * Ток приложение не меряет и измерить не может, поэтому его приносят клещами
+ * или мультиметром. Арифметику - на сколько суток хватит батареи - приложение
+ * сделать может, и это ровно та часть, где от него есть польза.
+ */
+@Composable
+private fun LeakCalculator(viewModel: ObdViewModel, chargePercent: Int?) {
+    val profile by viewModel.profile.collectAsState()
+    var text by remember { mutableStateOf("") }
+
+    Panel {
+        PanelTitle(stringResource(R.string.leak_title))
+        Hint(stringResource(R.string.leak_hint, profile.batteryAh))
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text(stringResource(R.string.leak_label)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        val milliAmps = text.replace(',', '.').trim().toDoubleOrNull()
+        if (milliAmps != null && milliAmps > 0) {
+            val verdict = Battery.leakVerdict(milliAmps)
+            Text(verdict.title, color = leakColor(verdict))
+            // Заряд берём измеренный, а если мотор работает - считаем от
+            // полного: процент при работающем генераторе ничего не значит.
+            val days = Battery.daysUntilFlat(profile.batteryAh, chargePercent ?: 100, milliAmps)
+            if (days != null) {
+                InfoRow(
+                    stringResource(R.string.leak_days),
+                    "%.1f".format(Locale.ROOT, days)
+                )
+                Hint(stringResource(R.string.leak_days_hint, chargePercent ?: 100))
+            }
+        }
+    }
+}
+
+private fun leakColor(verdict: LeakVerdict): Color = when (verdict) {
+    LeakVerdict.NORMAL -> GaugeGreen
+    LeakVerdict.ELEVATED -> GaugeAmber
+    LeakVerdict.HIGH -> GaugeRed
 }
 
 @Composable

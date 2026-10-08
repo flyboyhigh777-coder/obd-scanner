@@ -521,9 +521,10 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         curbMassKg: Double? = null,
         payloadKg: Double? = null,
         rpmRedline: Double? = null,
+        batteryAh: Double? = null,
         tyreText: String? = null
     ) {
-        settings.updateVehicleProfile(tankLitres, curbMassKg, payloadKg, rpmRedline, tyreText)
+        settings.updateVehicleProfile(tankLitres, curbMassKg, payloadKg, rpmRedline, batteryAh, tyreText)
         applyProfile(settings.vehicleProfile())
     }
 

@@ -292,6 +292,14 @@ private fun ProfileEditor(viewModel: ObdViewModel) {
             modifier = Modifier.weight(1f)
         ) { viewModel.updateProfile(payloadKg = it) }
     }
+    // Ёмкость приложение не измеряет - это то, что написано на батарее. Нужна
+    // только для расчёта, на сколько её хватит с известной утечкой.
+    NumberField(
+        label = stringResource(R.string.vehicle_battery_ah),
+        value = profile.batteryAh,
+        decimals = 0,
+        modifier = Modifier.fillMaxWidth()
+    ) { viewModel.updateProfile(batteryAh = it) }
     OutlinedTextField(
         value = tyreText,
         onValueChange = { text ->

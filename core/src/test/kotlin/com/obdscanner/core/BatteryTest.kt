@@ -4,6 +4,7 @@ import com.obdscanner.core.electrical.Battery
 import com.obdscanner.core.electrical.BatteryMonitor
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.electrical.CrankVerdict
+import com.obdscanner.core.electrical.LeakVerdict
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -143,5 +144,41 @@ class BatteryTest {
         m.add(200, Double.NaN, 0.0)
         assertEquals(12.6, m.minVolts!!, 1e-9)
         assertEquals(1, m.samples.size)
+    }
+
+    /**
+     * Ток утечки приложение не меряет - его приносят клещами. Проверяем, что
+     * арифметика по принесённому числу честная.
+     */
+    @Test
+    fun leakArithmetic() {
+        // 95 А·ч, заряд 100%, утечка 50 мА: до 50% уходит 47.5 А·ч,
+        // это 950 часов, почти сорок суток.
+        val days = Battery.daysUntilFlat(batteryAh = 95.0, chargePercent = 100, milliAmps = 50.0)!!
+        assertEquals(39.6, days, 0.2)
+
+        // Утечка в ампер съедает ту же половину за двое суток.
+        val fast = Battery.daysUntilFlat(batteryAh = 95.0, chargePercent = 100, milliAmps = 1000.0)!!
+        assertEquals(1.98, fast, 0.05)
+    }
+
+    /** Разряженная батарея "простоит" ноль - а не отрицательное время. */
+    @Test
+    fun alreadyFlatBatteryLastsZero() {
+        assertEquals(0.0, Battery.daysUntilFlat(95.0, 40, 50.0)!!, 1e-9)
+    }
+
+    /** Нулевой и бессмысленный ток - это не ответ, а отсутствие ответа. */
+    @Test
+    fun noCurrentMeansNoAnswer() {
+        assertNull(Battery.daysUntilFlat(95.0, 100, 0.0))
+        assertNull(Battery.daysUntilFlat(0.0, 100, 50.0))
+    }
+
+    @Test
+    fun leakThresholds() {
+        assertEquals(LeakVerdict.NORMAL, Battery.leakVerdict(30.0))
+        assertEquals(LeakVerdict.ELEVATED, Battery.leakVerdict(65.0))
+        assertEquals(LeakVerdict.HIGH, Battery.leakVerdict(250.0))
     }
 }

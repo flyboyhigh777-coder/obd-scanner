@@ -104,6 +104,7 @@ class AppSettings(context: Context) {
             curbMassKg = prefs.getFloat(KEY_MASS, base.curbMassKg.toFloat()).toDouble(),
             payloadKg = prefs.getFloat(KEY_PAYLOAD, base.payloadKg.toFloat()).toDouble(),
             rpmRedline = prefs.getFloat(KEY_REDLINE, base.rpmRedline.toFloat()).toDouble(),
+            batteryAh = prefs.getFloat(KEY_BATTERY_AH, base.batteryAh.toFloat()).toDouble(),
             tyre = prefs.getString(KEY_TYRE, null)?.let { TyreSize.parse(it) } ?: base.tyre
         )
     }
@@ -113,6 +114,7 @@ class AppSettings(context: Context) {
         curbMassKg: Double? = null,
         payloadKg: Double? = null,
         rpmRedline: Double? = null,
+        batteryAh: Double? = null,
         tyreText: String? = null
     ) {
         prefs.edit().apply {
@@ -120,6 +122,7 @@ class AppSettings(context: Context) {
             curbMassKg?.let { putFloat(KEY_MASS, it.toFloat()) }
             payloadKg?.let { putFloat(KEY_PAYLOAD, it.toFloat()) }
             rpmRedline?.let { putFloat(KEY_REDLINE, it.toFloat()) }
+            batteryAh?.let { putFloat(KEY_BATTERY_AH, it.toFloat()) }
             tyreText?.let { putString(KEY_TYRE, it) }
         }.apply()
     }
@@ -128,7 +131,7 @@ class AppSettings(context: Context) {
     fun resetVehicleProfile() {
         prefs.edit()
             .remove(KEY_TANK).remove(KEY_MASS).remove(KEY_PAYLOAD)
-            .remove(KEY_REDLINE).remove(KEY_TYRE)
+            .remove(KEY_REDLINE).remove(KEY_TYRE).remove(KEY_BATTERY_AH)
             .apply()
     }
 
@@ -188,6 +191,7 @@ class AppSettings(context: Context) {
         const val KEY_DASH = "dashboard_pids"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"
         const val KEY_VOLTAGE_OFFSET = "voltage_offset"
+        const val KEY_BATTERY_AH = "battery_ah"
         const val MAX_VOLTAGE_OFFSET = 1.0f
         const val KEY_GAUGE_STYLE = "gauge_style"
         const val KEY_PROTOCOL = "obd_protocol"

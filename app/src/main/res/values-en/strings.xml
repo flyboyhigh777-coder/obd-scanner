@@ -271,4 +271,10 @@
     <string name="scan_found_hint">What each one means, nobody can say without documentation. Press Use to add the number as your own parameter and work out the formula.</string>
     <string name="scan_use">Use</string>
     <string name="scan_clear">Clear the results</string>
+    <string name="leak_title">Parasitic draw calculator</string>
+    <string name="leak_hint">The app cannot measure current; it is measured with a clamp meter or a multimeter in series with the negative terminal. What the app can do is the arithmetic. Capacity comes from the profile: %1$.0f Ah — correct it on the Vehicle tab if yours differs.</string>
+    <string name="leak_label">Measured quiescent current, mA</string>
+    <string name="leak_days">Will last, days</string>
+    <string name="leak_days_hint">Down to 50%% charge, below which a cold start may fail. Counted from the current %1$d%%, with no allowance for cold or self-discharge — in frost it will be less.</string>
+    <string name="vehicle_battery_ah">Battery capacity, Ah</string>
 </resources>
