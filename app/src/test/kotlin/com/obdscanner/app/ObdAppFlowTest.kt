@@ -250,6 +250,9 @@ class ObdAppFlowTest {
         assertTrue("виртуальный ЭБУ ответил: $found", 0xF40C in found)
         // Номера, которых нет, в находки попадать не должны.
         assertFalse("лишнего не найдено: $found", 0xF401 in found)
+        // Раздел перебора живёт внизу вкладки - без прокрутки его не видно ни
+        // на экране, ни на снимке.
+        compose.onNodeWithText("Ответившие параметры: ${found.size}").performScrollTo().assertExists()
         shot("18_pid_scan")
 
         // Авто: профиль машины и справочники.
