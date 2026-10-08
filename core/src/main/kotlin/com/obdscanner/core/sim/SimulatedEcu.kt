@@ -209,6 +209,7 @@ class SimulatedEcu(
             0x07 -> dtcFrame(0x47, pendingDtcs)
             0x09 -> respondVehicleInfo(command)
             0x0A -> dtcFrame(0x4A, permanentDtcs)
+            0x22 -> respondExtendedData(command)
             else -> noData()
         }
     }
@@ -219,6 +220,27 @@ class SimulatedEcu(
         command == "ATDPN" -> prompt("6\r")
         command.startsWith("ATDP") -> prompt("ISO 15765-4 (CAN 11/500)\r")
         else -> ok()
+    }
+
+    /**
+     * Заводские параметры (режим 22) - чтобы было на чём проверять перебор.
+     *
+     * Номера здесь ВЫДУМАНЫ для симулятора и к ME17.9.7 отношения не имеют:
+     * настоящего списка в открытом виде нет, а подсунуть выдуманный под видом
+     * настоящего - хуже, чем не иметь никакого. Один из них нарочно растёт
+     * вместе с нагрузкой: на нём видно, как работает сравнение "до и после".
+     */
+    private fun respondExtendedData(command: String): String {
+        val pid = command.drop(2).take(4).toIntOrNull(16) ?: return prompt("?\r")
+        val t = seconds()
+        val data = when (pid) {
+            0xF40C -> two((model.rpm(t) * 4).toInt())
+            0xF405 -> intArrayOf((model.coolant(t) + 40).toInt())
+            0x1101 -> two((model.load(t) * 100).toInt())
+            0x1148 -> intArrayOf((model.throttle(t) * 2.55).toInt().coerceIn(0, 255))
+            else -> return noData()
+        }
+        return frame(intArrayOf(0x62, (pid shr 8) and 0xFF, pid and 0xFF) + data)
     }
 
     private fun respondCurrentData(command: String): String {
@@ -263,9 +285,11 @@ class SimulatedEcu(
         return frame(body.toIntArray())
     }
 
+    /** Старший байт, младший байт - так ЭБУ передаёт двухбайтные значения. */
+    private fun two(value: Int) = intArrayOf((value shr 8) and 0xFF, value and 0xFF)
+
     /** Значение PID, упакованное в байты ровно так, как это делает ЭБУ. */
     private fun encodeValue(pid: Int, t: Double): IntArray? {
-        fun two(value: Int) = intArrayOf((value shr 8) and 0xFF, value and 0xFF)
         return when (pid) {
             Pids.MONITOR_STATUS.id -> {
                 val count = storedDtcs.size

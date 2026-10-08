@@ -275,7 +275,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val recorder = TripRecorder()
 
-    private val battery = BatteryMonitor()
+    private val batteryMonitor = BatteryMonitor()
 
     /**
      * Поправка к показаниям адаптера. Клоны ELM327 врут по напряжению на
@@ -718,7 +718,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         // принципиальная - 14 В при работающем моторе это норма, а при
         // заглушенном такого напряжения просто не бывает.
         val running = if (rpm != null) rpm >= Battery.RUNNING_RPM else corrected >= ALTERNATOR_VOLTS
-        battery.add(System.currentTimeMillis(), corrected, running)
+        batteryMonitor.add(System.currentTimeMillis(), corrected, running)
         publishBattery(fromAdapter = fromAdapter != null)
     }
 
@@ -732,7 +732,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      */
     private suspend fun runCrankTest(session: ObdSession) {
         crankTestRunning = true
-        battery.reset()
+        batteryMonitor.reset()
         publishBattery(crankTestActive = true)
         val deadline = System.currentTimeMillis() + CRANK_TEST_MILLIS
         while (crankTestRunning &&
@@ -745,10 +745,10 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 // Обороты в этом режиме не опрашиваются, поэтому про работу
                 // мотора судим по напряжению: генератор поднимает сеть выше
                 // любого состояния покоя.
-                battery.add(System.currentTimeMillis(), corrected, corrected >= ALTERNATOR_VOLTS)
+                batteryMonitor.add(System.currentTimeMillis(), corrected, corrected >= ALTERNATOR_VOLTS)
                 publishBattery(crankTestActive = true)
                 // Пуск состоялся и мотор работает - дальше ждать нечего.
-                if (battery.cranking != null && corrected >= ALTERNATOR_VOLTS) break
+                if (batteryMonitor.cranking != null && corrected >= ALTERNATOR_VOLTS) break
             }
             delay(CRANK_SAMPLE_MILLIS)
         }
@@ -761,15 +761,15 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         crankTestActive: Boolean = _battery.value.crankTestActive,
     ) {
         _battery.value = BatteryState(
-            volts = battery.last?.volts,
+            volts = batteryMonitor.last?.volts,
             fromAdapter = fromAdapter,
-            verdict = battery.verdict(),
-            chargePercent = battery.restingChargePercent(),
-            minVolts = battery.minVolts,
-            maxVolts = battery.maxVolts,
-            cranking = battery.cranking,
+            verdict = batteryMonitor.verdict(),
+            chargePercent = batteryMonitor.restingChargePercent(),
+            minVolts = batteryMonitor.minVolts,
+            maxVolts = batteryMonitor.maxVolts,
+            cranking = batteryMonitor.cranking,
             crankTestActive = crankTestActive,
-            history = battery.samples.takeLast(VOLTAGE_HISTORY).map { it.volts },
+            history = batteryMonitor.samples.takeLast(VOLTAGE_HISTORY).map { it.volts },
         )
     }
 
@@ -785,7 +785,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Сбрасывает минимум, максимум и результат пуска. */
     fun resetBattery() {
-        battery.reset()
+        batteryMonitor.reset()
         publishBattery(crankTestActive = false)
     }
 

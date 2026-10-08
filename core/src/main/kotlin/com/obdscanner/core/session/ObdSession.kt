@@ -12,8 +12,10 @@ import com.obdscanner.core.elm.ObdText
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.ObdPid
+import com.obdscanner.core.obd.PidScan
 import com.obdscanner.core.obd.PidSupport
 import com.obdscanner.core.obd.Pids
+import com.obdscanner.core.obd.ScanHit
 import com.obdscanner.core.obd.VinDecoder
 import java.io.Closeable
 
@@ -238,6 +240,61 @@ class ObdSession(
         return pid.decode(data)
     }
 
+    /**
+     * Перебор заводских параметров режима 22.
+     *
+     * Списка этих номеров для ME17.9.7/ME17.9.71 в открытом виде нет, зато сам
+     * блок отвечает честно: на несуществующий параметр приходит отказ, на
+     * существующий - значение. Поэтому номер ищется не по форумам, а опросом
+     * конкретной машины.
+     *
+     * Таймаут короткий: большинство номеров не существует, и ждать по секунде
+     * на каждый - это часы. Пропущенный из-за этого ответ не страшен, перебор
+     * можно повторить.
+     *
+     * Только чтение. Запись (режим 2E) не делается нигде: оборванная запись
+     * превращает блок в кирпич.
+     */
+    fun scanService22(
+        from: Int,
+        to: Int,
+        shouldStop: () -> Boolean = { false },
+        onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> },
+    ): List<ScanHit> {
+        val range = PidScan.clampRange(from, to)
+        val hits = ArrayList<ScanHit>()
+        var done = 0
+        for (pid in range.from..range.to) {
+            if (shouldStop()) break
+            readService22(pid)?.let { hits.add(ScanHit(pid, it.toList())) }
+            done++
+            onProgress(done, range.size, hits.size)
+        }
+        return hits
+    }
+
+    /**
+     * Перечитывает уже найденные параметры - для сравнения "до и после".
+     * Человек делает снимок, включает фары или обогрев стекла, делает второй,
+     * и смотрит, что изменилось: так находится параметр, которого нет ни в
+     * одной документации.
+     */
+    fun readService22(pids: List<Int>, shouldStop: () -> Boolean = { false }): List<ScanHit> {
+        val out = ArrayList<ScanHit>(pids.size)
+        for (pid in pids) {
+            if (shouldStop()) break
+            readService22(pid)?.let { out.add(ScanHit(pid, it.toList())) }
+        }
+        return out
+    }
+
+    private fun readService22(pid: Int): IntArray? {
+        val reply = adapter.request("22%04X".format(pid), timeoutMillis = SCAN_TIMEOUT_MILLIS)
+        if (reply.isError) return null
+        val echo = intArrayOf((pid shr 8) and 0xFF, pid and 0xFF)
+        return ObdPayload.data(reply, 0x22, echo)?.takeIf { it.isNotEmpty() }
+    }
+
     /** Напряжение на разъёме по версии самого адаптера (`AT RV`), в вольтах. */
     fun adapterVoltage(): Double? {
         val reply = adapter.request(Elm.READ_VOLTAGE, timeoutMillis = 1000)
@@ -250,4 +307,13 @@ class ObdSession(
         adapter.request(command.trim().uppercase(), timeoutMillis)
 
     override fun close() = adapter.close()
+
+    private companion object {
+        /**
+         * Таймаут одного запроса при переборе. Большинство номеров не
+         * существует, и на отказ блок отвечает сразу; ждать по секунде на
+         * каждый из тысяч номеров - это часы вместо минут.
+         */
+        const val SCAN_TIMEOUT_MILLIS = 350L
+    }
 }
