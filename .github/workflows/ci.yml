@@ -89,9 +89,14 @@ jobs:
       # Стабильная ссылка на скачивание вместо GitHub Actions Artifacts: у
       # артефактов подписанный URL с коротким сроком жизни, который мобильные
       # браузеры скачивают через раз. Релиз с фиксированным тегом даёт обычную
-      # прямую ссылку, перезаписывается при каждой сборке в main.
+      # прямую ссылку, перезаписывается при каждом пуше.
+      #
+      # Публикуется с любой ветки: пока работа идёт не в main, иначе скачать
+      # сборку можно было бы только артефактом прогона. Условие по типу события,
+      # а не по ветке - прогон для pull request не должен перезаписывать релиз
+      # сборкой из ветки-источника.
       - name: Publish debug APK to a stable GitHub Release
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -99,7 +104,7 @@ jobs:
           gh release create debug-latest app/build/outputs/apk/debug/app-debug.apk \
             --repo "${{ github.repository }}" \
             --title "OBD Сканер - debug APK (последняя сборка)" \
-            --notes "Автосборка с main, коммит ${GITHUB_SHA}. Ссылка на этот релиз не меняется - обновляется при каждом пуше." \
+            --notes "Автосборка ветки ${GITHUB_REF_NAME}, коммит ${GITHUB_SHA}. Ссылка на этот релиз не меняется - файл перезаписывается при каждом пуше." \
             --target "${GITHUB_SHA}"
 
       - name: Publish screenshots to ci-screenshots branch
