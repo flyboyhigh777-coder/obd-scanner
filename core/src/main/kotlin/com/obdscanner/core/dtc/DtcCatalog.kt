@@ -27,8 +27,8 @@ enum class DtcTextSource {
     /** Таблица конкретного блока управления (коды производителя). */
     MANUFACTURER,
 
-    /** Датасет обобщённых кодов SAE - текст английский. */
-    SAE_ENGLISH,
+    /** Справочник обобщённых кодов SAE - русское название, причины, симптомы. */
+    SAE_REFERENCE,
 
     /** Описание семейства кодов: точной расшифровки нет. */
     FAMILY,
@@ -37,8 +37,30 @@ enum class DtcTextSource {
     NONE
 }
 
-/** Расшифровка кода вместе с её происхождением. */
-data class DtcDescription(val text: String, val source: DtcTextSource, val sourceNote: String? = null)
+/**
+ * Расшифровка кода вместе с её происхождением.
+ *
+ * Причины и симптомы берутся из справочника и не зависят от того, каким слоем
+ * получено название: если человек положил свою таблицу из документации, текст
+ * будет его, а причины - всё равно из справочника, когда они там есть.
+ */
+data class DtcDescription(
+    val text: String,
+    val source: DtcTextSource,
+    val sourceNote: String? = null,
+    val causes: List<String> = emptyList(),
+    val symptoms: List<String> = emptyList(),
+)
+
+/** Запись справочника обобщённых кодов: названия и то, с чего начинать поиск. */
+data class DtcReference(
+    val ru: String,
+    val en: String,
+    val causes: List<String> = emptyList(),
+    val symptoms: List<String> = emptyList(),
+) {
+    val title: String get() = ObdText.pick(ru.ifEmpty { en }, en.ifEmpty { ru })
+}
 
 object DtcCatalog {
 
@@ -50,12 +72,13 @@ object DtcCatalog {
     var manufacturerFamily: String? = null
 
     /**
-     * Полный справочник обобщённых кодов SAE (9 533 кода) - он лежит в
-     * ресурсах приложения, а не в :core, потому что это полмегабайта данных, и
-     * читать их должен тот, у кого есть доступ к ассетам. :core обходится
-     * функцией "код -> английский заголовок" и ничего не знает про Android.
+     * Полный справочник обобщённых кодов SAE (9 533 кода с русскими названиями,
+     * частыми причинами и симптомами) - он лежит в ресурсах приложения, а не в
+     * :core, потому что это больше двух мегабайт данных, и читать их должен
+     * тот, у кого есть доступ к ассетам. :core обходится функцией
+     * "код -> запись" и ничего не знает про Android.
      */
-    var saeFallback: ((String) -> String?)? = null
+    var reference: ((String) -> DtcReference?)? = null
 
     private val TABLE: Map<String, Pair<String, String>> by lazy {
         buildMap {
@@ -478,32 +501,51 @@ object DtcCatalog {
 
     /**
      * Расшифровка по слоям, от самого надёжного к самому общему:
-     * свой русский справочник, таблица блока управления, обобщённый датасет
-     * SAE (по-английски) и, если ничего не нашлось, описание семейства кодов.
+     * документация на машину, свой русский справочник, таблица блока
+     * управления, справочник обобщённых кодов и, если ничего не нашлось,
+     * описание семейства кодов.
+     *
+     * Частые причины и симптомы берутся из справочника отдельно от названия:
+     * у первых трёх слоёв текст точнее, но причин у них нет, а код при этом
+     * обычно тот же самый.
      */
     fun lookup(code: String): DtcDescription {
         val upper = code.uppercase()
+        val ref = reference?.invoke(upper)
+        val causes = ref?.causes ?: emptyList()
+        val symptoms = ref?.symptoms ?: emptyList()
+
         // Документация на машину - первая: если человек принёс таблицу из
         // руководства по ремонту, она точнее любого свода.
         ManufacturerDtc.describeFromDocumentation(upper)?.let {
             return DtcDescription(
                 it,
                 DtcTextSource.DOCUMENTATION,
-                ObdText.pick("Из документации на машину", "From the vehicle documentation")
+                ObdText.pick("Из документации на машину", "From the vehicle documentation"),
+                causes,
+                symptoms,
             )
         }
         TABLE[upper]?.let {
-            return DtcDescription(ObdText.pick(it.first, it.second), DtcTextSource.CURATED)
+            return DtcDescription(
+                ObdText.pick(it.first, it.second),
+                DtcTextSource.CURATED,
+                null,
+                causes,
+                symptoms,
+            )
         }
         val manufacturer = ManufacturerDtc.table(manufacturerFamily)
         manufacturer?.describe(upper)?.let {
-            return DtcDescription(it, DtcTextSource.MANUFACTURER, manufacturer.source)
+            return DtcDescription(it, DtcTextSource.MANUFACTURER, manufacturer.source, causes, symptoms)
         }
-        saeFallback?.invoke(upper)?.let {
+        if (ref != null) {
             return DtcDescription(
-                it,
-                DtcTextSource.SAE_ENGLISH,
-                ObdText.pick("Описание SAE, на английском", "SAE description, in English")
+                ref.title,
+                DtcTextSource.SAE_REFERENCE,
+                ObdText.pick("Справочник обобщённых кодов SAE", "Generic SAE code reference"),
+                causes,
+                symptoms,
             )
         }
         family(upper)?.let {
@@ -540,7 +582,7 @@ object DtcCatalog {
         DtcTextSource.DOCUMENTATION,
         DtcTextSource.CURATED,
         DtcTextSource.MANUFACTURER,
-        DtcTextSource.SAE_ENGLISH
+        DtcTextSource.SAE_REFERENCE
     )
 
     /** Сколько кодов знает выбранная таблица производителя. */

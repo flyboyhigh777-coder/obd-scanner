@@ -5,9 +5,9 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdscanner.app.data.AppSettings
+import com.obdscanner.app.data.DocumentationDtc
+import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.app.data.ExportResult
-import com.obdscanner.app.data.ManufacturerDtcAsset
-import com.obdscanner.app.data.SaeDtcCatalogAsset
 import com.obdscanner.app.data.TripExport
 import com.obdscanner.app.transport.BleObdChannel
 import com.obdscanner.app.transport.BluetoothObdChannel
@@ -168,6 +168,14 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private val _dtc = MutableStateFlow(DtcState())
     val dtc: StateFlow<DtcState> = _dtc.asStateFlow()
 
+    /**
+     * Меняется при каждой правке своих расшифровок. Нужен только для того,
+     * чтобы список кодов перерисовался: сами расшифровки живут в справочнике
+     * :core, и Compose не может следить за ними напрямую.
+     */
+    private val _dtcTableRevision = MutableStateFlow(0)
+    val dtcTableRevision: StateFlow<Int> = _dtcTableRevision.asStateFlow()
+
     private val _vehicle = MutableStateFlow(VehicleState())
     val vehicle: StateFlow<VehicleState> = _vehicle.asStateFlow()
 
@@ -249,8 +257,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         dieselFuel = FuelType.isDiesel(_profile.value.fuelTypeCode)
         // Справочники читаются с диска - только не на главном потоке.
         viewModelScope.launch(Dispatchers.IO) {
-            SaeDtcCatalogAsset.load(getApplication())
-            ManufacturerDtcAsset.load(getApplication())
+            DtcReferenceAsset.load(getApplication())
+            DocumentationDtc.load(getApplication())
         }
     }
 
@@ -327,6 +335,58 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     fun clearDtcs() {
         _dtc.value = _dtc.value.copy(reading = true, message = null)
         tasks.trySend(ObdTask.ClearDtcs)
+    }
+
+    /**
+     * Своя расшифровка кода: то, что человек нашёл в руководстве по ремонту или
+     * у диагноста. Пустой текст убирает её.
+     *
+     * Счётчик [dtcTableRevision] существует потому, что расшифровки лежат в
+     * справочнике :core, а не в состоянии экрана: Compose о таком изменении сам
+     * не узнает, и без счётчика список кодов остался бы со старым текстом.
+     */
+    fun setDtcDescription(code: String, text: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            DocumentationDtc.put(getApplication(), code, text)
+            _dtcTableRevision.value++
+        }
+    }
+
+    /** Импорт таблицы расшифровок из файла, выбранного на телефоне. */
+    fun importDtcTable(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val text = runCatching {
+                app.contentResolver.openInputStream(uri)?.use { stream ->
+                    // Таблицы из Excel и с русских сайтов часто в cp1251;
+                    // читаем как UTF-8, а при явном сбое пробуем windows-1251.
+                    val bytes = stream.readBytes()
+                    val utf8 = bytes.toString(Charsets.UTF_8)
+                    if (utf8.contains('\uFFFD')) {
+                        bytes.toString(charset("windows-1251"))
+                    } else {
+                        utf8
+                    }
+                }
+            }.getOrNull()
+            val added = if (text == null) 0 else DocumentationDtc.import(app, text)
+            _dtcTableRevision.value++
+            _dtc.value = _dtc.value.copy(
+                message = if (added > 0) {
+                    app.getString(R.string.dtc_import_done, added)
+                } else {
+                    app.getString(R.string.dtc_import_failed)
+                }
+            )
+        }
+    }
+
+    /** Убирает все расшифровки, введённые вручную. */
+    fun clearDtcDescriptions() {
+        viewModelScope.launch(Dispatchers.IO) {
+            DocumentationDtc.clearUser(getApplication())
+            _dtcTableRevision.value++
+        }
     }
 
     fun refreshVehicle() {

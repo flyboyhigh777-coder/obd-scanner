@@ -10,7 +10,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.obdscanner.app.data.SaeDtcCatalogAsset
+import com.obdscanner.app.data.DocumentationDtc
+import com.obdscanner.app.data.DtcReferenceAsset
+import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.dtc.DtcTextSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -132,6 +134,34 @@ class ObdAppFlowTest {
         val uazCode = dtc.stored.first { it.code == "P1513" }
         assertEquals(DtcTextSource.MANUFACTURER, uazCode.descriptionDetails.source)
         assertTrue(uazCode.description, uazCode.description.contains("холостого хода"))
+
+        // Справочник обобщённых кодов: русское название, частые причины и
+        // симптомы. Проверяем именно на P0171 - он есть и в русской таблице
+        // приложения, и в справочнике: название должно остаться своим
+        // (оно точнее), а причины подхватиться из справочника.
+        pumpUntil(20_000, "загрузку справочника кодов") { DtcReferenceAsset.loaded }
+        val lean = dtc.stored.first { it.code == "P0171" }.descriptionDetails
+        assertEquals(DtcTextSource.CURATED, lean.source)
+        assertTrue("причины: ${lean.causes}", lean.causes.isNotEmpty())
+        assertTrue("симптомы: ${lean.symptoms}", lean.symptoms.isNotEmpty())
+        // Причины отсортированы по вероятности, подсос воздуха - первый.
+        assertTrue(lean.causes.first(), lean.causes.first().contains("одсос"))
+
+        // Своя расшифровка: ровно то, чем человек закрывает отсутствие
+        // таблицы P1xxx. Она должна перебить сводку по контроллеру и
+        // сохраниться в файл, а не остаться в памяти.
+        vm.setDtcDescription("P1513", "Из руководства: РХХ, замыкание на массу")
+        pumpUntil(20_000, "сохранение своей расшифровки") {
+            DocumentationDtc.userText("P1513") != null
+        }
+        val own = Dtc("P1513").descriptionDetails
+        assertEquals(DtcTextSource.DOCUMENTATION, own.source)
+        assertEquals("Из руководства: РХХ, замыкание на массу", own.text)
+        vm.clearDtcDescriptions()
+        pumpUntil(20_000, "удаление своей расшифровки") {
+            DocumentationDtc.userText("P1513") == null
+        }
+        assertEquals(DtcTextSource.MANUFACTURER, Dtc("P1513").descriptionDetails.source)
         shot("06_dtc_list")
         compose.onNodeWithText("Бортовые тесты").performScrollTo()
         shot("07_dtc_monitors")
@@ -193,11 +223,10 @@ class ObdAppFlowTest {
         openTab("Авто")
         pumpUntil(20_000, "данные автомобиля") { vm.vehicle.value.loaded }
         assertEquals("uaz_patriot_2016", vm.profile.value.id)
-        assertEquals("Bosch ME17.9.7", vm.profile.value.ecuName)
-        // Справочник SAE лежит в ассетах - проверяем, что он реально собран и
+        assertEquals("Bosch ME17.9.71 / ME17.9.7", vm.profile.value.ecuName)
+        // Справочник лежит в ассетах - проверяем, что он реально собран и
         // разобран, а не просто объявлен в сборке.
-        pumpUntil(20_000, "загрузку справочника SAE") { SaeDtcCatalogAsset.loaded }
-        assertEquals(9533, SaeDtcCatalogAsset.size)
+        assertEquals(9533, DtcReferenceAsset.size)
         // Название профиля есть и в заголовке, и на кнопке выбора - поэтому ищем
         // по всем совпадениям, а не ровно одно.
         assertTrue(compose.onAllNodesWithText("УАЗ Патриот 2016+").fetchSemanticsNodes().isNotEmpty())

@@ -214,4 +214,18 @@
     <string name="connect_protocol_hint">Auto-detect always works, but cheap adapters redo the search on every connection. A 2016+ Patriot uses CAN 11 bit / 500 kbit/s — naming it directly saves a few seconds. If it turns out wrong, the app falls back to auto-detect.</string>
     <string name="connect_protocol_choose">Choose a protocol</string>
     <string name="vehicle_doc_table">From the vehicle documentation: %1$d codes</string>
+    <string name="dtc_causes">Likely causes</string>
+    <string name="dtc_symptoms">Symptoms</string>
+    <string name="dtc_own_action">Own description</string>
+    <string name="dtc_own_title">Description for %1$s</string>
+    <string name="dtc_own_hint">Type what the repair manual for your car says. This text replaces the built-in one and survives a restart.</string>
+    <string name="dtc_own_label">Code description</string>
+    <string name="dtc_own_save">Save</string>
+    <string name="dtc_own_delete">Delete</string>
+    <string name="dtc_import_table">Import a table</string>
+    <string name="dtc_import_hint">A description table from a file: one code per line, separated by a tab or a semicolon. An Excel export and a windows-1251 file both work.</string>
+    <string name="dtc_import_done">Descriptions added: %1$d</string>
+    <string name="dtc_import_failed">No codes found in that file. It needs to be a text file with one code per line: P1513\tdescription</string>
+    <string name="dtc_own_count">Own descriptions: %1$d</string>
+    <string name="dtc_own_clear">Remove all of mine</string>
 </resources>

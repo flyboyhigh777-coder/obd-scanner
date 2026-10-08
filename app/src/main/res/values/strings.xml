@@ -227,4 +227,18 @@
     <string name="connect_protocol_hint">Автоопределение работает всегда, но дешёвые адаптеры перебирают протоколы заново при каждом подключении. У Патриота 2016+ это CAN 11 бит / 500 кбит/с — если указать его прямо, связь поднимается на несколько секунд быстрее. Не подойдёт — приложение само вернётся к автоопределению.</string>
     <string name="connect_protocol_choose">Выбрать протокол</string>
     <string name="vehicle_doc_table">Из документации на машину: %1$d кодов</string>
+    <string name="dtc_causes">Частые причины</string>
+    <string name="dtc_symptoms">Как проявляется</string>
+    <string name="dtc_own_action">Своя расшифровка</string>
+    <string name="dtc_own_title">Расшифровка кода %1$s</string>
+    <string name="dtc_own_hint">Впишите то, что написано в руководстве по ремонту на вашу машину. Эта расшифровка будет показываться вместо встроенной и сохранится после перезапуска.</string>
+    <string name="dtc_own_label">Описание кода</string>
+    <string name="dtc_own_save">Сохранить</string>
+    <string name="dtc_own_delete">Удалить</string>
+    <string name="dtc_import_table">Импорт таблицы</string>
+    <string name="dtc_import_hint">Таблица расшифровок из файла: по строке на код, разделитель — табуляция или точка с запятой. Подойдёт выгрузка из Excel и файл в windows-1251.</string>
+    <string name="dtc_import_done">Добавлено расшифровок: %1$d</string>
+    <string name="dtc_import_failed">В файле не нашлось ни одного кода. Нужен текстовый файл, по строке на код: P1513\tописание</string>
+    <string name="dtc_own_count">Своих расшифровок: %1$d</string>
+    <string name="dtc_own_clear">Убрать все свои</string>
 </resources>

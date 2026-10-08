@@ -33,8 +33,8 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
-import com.obdscanner.app.data.ManufacturerDtcAsset
-import com.obdscanner.app.data.SaeDtcCatalogAsset
+import com.obdscanner.app.data.DocumentationDtc
+import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GradientTopBar
@@ -100,11 +100,11 @@ fun VehicleScreen(viewModel: ObdViewModel) {
             profile.manufacturerDtcFamily?.let { family ->
                 Hint(stringResource(R.string.vehicle_ecu_table, family, ManufacturerDtc.size(family)))
             }
-            if (ManufacturerDtcAsset.size > 0) {
-                Hint(stringResource(R.string.vehicle_doc_table, ManufacturerDtcAsset.size))
+            if (DocumentationDtc.size > 0) {
+                Hint(stringResource(R.string.vehicle_doc_table, DocumentationDtc.size))
             }
-            if (SaeDtcCatalogAsset.loaded) {
-                Hint(stringResource(R.string.vehicle_sae_table, SaeDtcCatalogAsset.size))
+            if (DtcReferenceAsset.loaded) {
+                Hint(stringResource(R.string.vehicle_sae_table, DtcReferenceAsset.size))
             }
         }
 

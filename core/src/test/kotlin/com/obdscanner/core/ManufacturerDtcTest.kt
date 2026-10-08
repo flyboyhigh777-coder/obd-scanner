@@ -2,6 +2,7 @@ package com.obdscanner.core
 
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.dtc.DtcCatalog
+import com.obdscanner.core.dtc.DtcReference
 import com.obdscanner.core.dtc.DtcTextSource
 import com.obdscanner.core.dtc.ManufacturerDtc
 import com.obdscanner.core.dtc.ManufacturerDtcFamily
@@ -22,7 +23,7 @@ class ManufacturerDtcTest {
     @After
     fun tearDown() {
         DtcCatalog.manufacturerFamily = null
-        DtcCatalog.saeFallback = null
+        DtcCatalog.reference = null
     }
 
     /** Без выбранного ЭБУ код производителя остаётся без точной расшифровки. */
@@ -63,31 +64,58 @@ class ManufacturerDtcTest {
     @Test
     fun curatedWinsOverEverything() {
         DtcCatalog.manufacturerFamily = ManufacturerDtcFamily.ME17_9_7
-        DtcCatalog.saeFallback = { "English text" }
+        DtcCatalog.reference = { DtcReference("Из справочника", "English text") }
         val details = Dtc("P0301").descriptionDetails
         assertEquals(DtcTextSource.CURATED, details.source)
         assertTrue(details.text.contains("цилиндр"))
     }
 
-    /** Датасет SAE подхватывает обобщённый код, которого нет в русском справочнике. */
+    /** Справочник подхватывает обобщённый код, которого нет в русской таблице. */
     @Test
-    fun saeDatasetFillsTheGap() {
+    fun referenceFillsTheGap() {
         val before = Dtc("P0479").descriptionDetails
         assertEquals(DtcTextSource.FAMILY, before.source)
 
-        DtcCatalog.saeFallback = { code -> if (code == "P0479") "Exhaust Pressure Control Valve Performance" else null }
+        DtcCatalog.reference = { code ->
+            if (code == "P0479") {
+                DtcReference(
+                    "Клапан управления давлением выхлопа - характеристика",
+                    "Exhaust Pressure Control Valve Performance",
+                    causes = listOf("Заклинил клапан"),
+                    symptoms = listOf("Горит Check Engine"),
+                )
+            } else {
+                null
+            }
+        }
         val after = Dtc("P0479").descriptionDetails
-        assertEquals(DtcTextSource.SAE_ENGLISH, after.source)
-        assertEquals("Exhaust Pressure Control Valve Performance", after.text)
-        // Приложение должно иметь возможность сказать, что текст английский
+        assertEquals(DtcTextSource.SAE_REFERENCE, after.source)
+        assertEquals("Клапан управления давлением выхлопа - характеристика", after.text)
+        assertEquals(listOf("Заклинил клапан"), after.causes)
+        assertEquals(listOf("Горит Check Engine"), after.symptoms)
+        // Приложение должно иметь возможность сказать, откуда текст
         assertNotNull(after.sourceNote)
+    }
+
+    /**
+     * Причины из справочника видны и тогда, когда название взято слоем выше:
+     * у русской таблицы текст точнее, но причин в ней нет.
+     */
+    @Test
+    fun curatedTitleKeepsReferenceCauses() {
+        DtcCatalog.reference = {
+            DtcReference("не нужно", "not used", causes = listOf("Отказала катушка"))
+        }
+        val details = Dtc("P0301").descriptionDetails
+        assertEquals(DtcTextSource.CURATED, details.source)
+        assertEquals(listOf("Отказала катушка"), details.causes)
     }
 
     /** Код производителя, которого нет и в таблице ЭБУ, не подменяется похожим. */
     @Test
     fun unknownManufacturerCodeIsNotInvented() {
         DtcCatalog.manufacturerFamily = ManufacturerDtcFamily.ME17_9_7
-        DtcCatalog.saeFallback = { null }
+        DtcCatalog.reference = { null }
         val details = Dtc("P1999").descriptionDetails
         assertEquals(DtcTextSource.FAMILY, details.source)
         assertTrue(details.text.contains("производител"))

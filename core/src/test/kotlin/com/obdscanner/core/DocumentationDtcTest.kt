@@ -2,6 +2,7 @@ package com.obdscanner.core
 
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.dtc.DtcCatalog
+import com.obdscanner.core.dtc.DtcReference
 import com.obdscanner.core.dtc.DtcTextSource
 import com.obdscanner.core.dtc.ManufacturerDtc
 import com.obdscanner.core.dtc.ManufacturerDtcFamily
@@ -26,7 +27,7 @@ class DocumentationDtcTest {
         // значит сломать соседние тесты.
         ManufacturerDtc.fromDocumentation = emptyMap()
         DtcCatalog.manufacturerFamily = null
-        DtcCatalog.saeFallback = null
+        DtcCatalog.reference = null
     }
 
     /** Разбор файла: табуляция или точка с запятой, комментарии, мусор. */
@@ -70,7 +71,7 @@ class DocumentationDtcTest {
     @Test
     fun documentationWinsOverEverything() {
         DtcCatalog.manufacturerFamily = ManufacturerDtcFamily.ME17_9_7
-        DtcCatalog.saeFallback = { "English text" }
+        DtcCatalog.reference = { DtcReference("Из справочника", "English text") }
         ManufacturerDtc.fromDocumentation = mapOf(
             "P1513" to "Из руководства: цепь РХХ, замыкание на массу",
             "P0301" to "Из руководства: пропуски в первом цилиндре"
