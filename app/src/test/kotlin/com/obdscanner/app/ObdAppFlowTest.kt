@@ -16,6 +16,7 @@ import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.dtc.DtcTextSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -236,6 +237,20 @@ class ObdAppFlowTest {
         // Про ток приложение говорит прямо на экране, а не прячет в README.
         compose.onNodeWithText("Почему нет тока и потребления").performScrollTo().assertExists()
         shot("17_battery")
+
+        // Перебор заводских параметров: списка номеров для ME17.9.7x в открытом
+        // виде нет, поэтому они ищутся опросом самой машины. Проверяем, что
+        // цепочка работает целиком - запрос, ответ блока, разбор, состояние.
+        openTab("Авто")
+        vm.startPidScan(0xF400, 0xF40F)
+        pumpUntil(30_000, "перебор параметров") {
+            !vm.pidScan.value.running && vm.pidScan.value.hits.isNotEmpty()
+        }
+        val found = vm.pidScan.value.hits.map { it.pid }
+        assertTrue("виртуальный ЭБУ ответил: $found", 0xF40C in found)
+        // Номера, которых нет, в находки попадать не должны.
+        assertFalse("лишнего не найдено: $found", 0xF401 in found)
+        shot("18_pid_scan")
 
         // Авто: профиль машины и справочники.
         openTab("Авто")

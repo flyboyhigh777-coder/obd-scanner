@@ -262,4 +262,26 @@
     <string name="battery_calibration_title">Поправка напряжения</string>
     <string name="battery_calibration_hint">Клоны ELM327 врут на одну-две десятых вольта, а разница между «заряжена» и «подсажена» — как раз десятые. Померьте мультиметром на клеммах и впишите разницу: например, если адаптер показывает 12,4, а мультиметр 12,6 — введите 0,2. Предел ±1 В.</string>
     <string name="battery_calibration_label">Поправка, В</string>
+    <string name="scan_title">Поиск заводских параметров (режим 22)</string>
+    <string name="scan_hint">Списка этих номеров для ME17.9.7x в открытом виде нет, но блок отвечает честно: на несуществующий номер — отказ, на существующий — значение. Перебор только читает, ничего не записывает.</string>
+    <string name="scan_from">С номера (hex)</string>
+    <string name="scan_to">По номер (hex)</string>
+    <string name="scan_start">Начать перебор</string>
+    <string name="scan_stop">Остановить</string>
+    <string name="scan_bad_range">Номера задаются шестнадцатеричными, например F400 и F4FF</string>
+    <string name="scan_progress">Проверено %1$d из %2$d, найдено %3$d</string>
+    <string name="scan_found">Найдено параметров: %1$d</string>
+    <string name="scan_none">В этом диапазоне блок не ответил ни на один номер. Попробуйте другой.</string>
+    <string name="scan_compare_title">Что меняется под нагрузкой</string>
+    <string name="scan_compare_hint">Так ищут параметр, которого нет в документации. Снимите снимок, включите фары, обогрев заднего стекла и печку на максимум, затем нажмите «Сравнить». Параметр, который изменился вместе с нагрузкой, и есть искомый.</string>
+    <string name="scan_snapshot">Снимок</string>
+    <string name="scan_compare">Сравнить</string>
+    <string name="scan_snapshot_taken">Снимок сделан: %1$d параметров</string>
+    <string name="scan_no_change">Ничего не изменилось</string>
+    <string name="scan_changed">Изменилось параметров: %1$d</string>
+    <string name="scan_change_line">было %1$s → стало %2$s (разница %3$d)</string>
+    <string name="scan_found_title">Ответившие параметры: %1$d</string>
+    <string name="scan_found_hint">Что означает каждый — без документации не скажет никто. Нажмите «Взять», чтобы добавить номер своим параметром и подобрать формулу.</string>
+    <string name="scan_use">Взять</string>
+    <string name="scan_clear">Очистить результаты</string>
 </resources>

@@ -67,6 +67,7 @@ fun VehicleScreen(viewModel: ObdViewModel) {
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
     var addingPid by remember { mutableStateOf(false) }
+    var prefillPid by remember { mutableStateOf<Int?>(null) }
     val dash = stringResource(R.string.common_dash)
 
     Column(
@@ -224,6 +225,11 @@ fun VehicleScreen(viewModel: ObdViewModel) {
             }
         }
 
+        PidScanSection(viewModel) { pid ->
+            prefillPid = pid
+            addingPid = true
+        }
+
         OutlinedButton(onClick = viewModel::refreshVehicle, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.vehicle_refresh), color = TextBright)
         }
@@ -236,11 +242,16 @@ fun VehicleScreen(viewModel: ObdViewModel) {
 
     if (addingPid) {
         CustomPidDialog(
-            onDismiss = { addingPid = false },
+            onDismiss = {
+                addingPid = false
+                prefillPid = null
+            },
             onSave = { pid ->
                 viewModel.addCustomPid(pid)
                 addingPid = false
-            }
+                prefillPid = null
+            },
+            initialPid = prefillPid
         )
     }
 }
@@ -328,10 +339,15 @@ private fun NumberField(
 
 /** Добавление своего параметра: номер PID и формула. */
 @Composable
-private fun CustomPidDialog(onDismiss: () -> Unit, onSave: (CustomPid) -> Unit) {
+private fun CustomPidDialog(
+    onDismiss: () -> Unit,
+    onSave: (CustomPid) -> Unit,
+    /** Номер, найденный перебором: диалог открывается уже заполненным. */
+    initialPid: Int? = null,
+) {
     var name by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf(0x01) }
-    var pidHex by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(if (initialPid != null) 0x22 else 0x01) }
+    var pidHex by remember { mutableStateOf(initialPid?.let { "%04X".format(it) } ?: "") }
     var bytes by remember { mutableStateOf("2") }
     var formula by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("") }

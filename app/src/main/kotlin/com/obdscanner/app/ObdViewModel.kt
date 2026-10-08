@@ -30,7 +30,10 @@ import com.obdscanner.core.obd.FuelEconomy
 import com.obdscanner.core.obd.FuelType
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.ObdPid
+import com.obdscanner.core.obd.PidScan
 import com.obdscanner.core.obd.Pids
+import com.obdscanner.core.obd.ScanChange
+import com.obdscanner.core.obd.ScanHit
 import com.obdscanner.core.obd.UnitSystem
 import com.obdscanner.core.obd.VinDecoder
 import com.obdscanner.core.obd.VinInfo
@@ -117,6 +120,23 @@ data class BatteryState(
     val history: List<Double> = emptyList(),
 )
 
+/**
+ * Поиск заводских параметров перебором.
+ *
+ * [snapshot] - сохранённый снимок значений, [changes] - что изменилось между
+ * ним и повторным чтением. Это и есть способ найти параметр, которого нет ни в
+ * одной документации: снять снимок, включить фары или обогрев стекла, сравнить.
+ */
+data class PidScanState(
+    val running: Boolean = false,
+    val done: Int = 0,
+    val total: Int = 0,
+    val hits: List<ScanHit> = emptyList(),
+    val snapshotSize: Int = 0,
+    val changes: List<ScanChange> = emptyList(),
+    val message: String? = null,
+)
+
 data class DtcState(
     val reading: Boolean = false,
     val loaded: Boolean = false,
@@ -167,6 +187,9 @@ private sealed interface ObdTask {
     data object ClearDtcs : ObdTask
     data object RefreshVehicle : ObdTask
     data object CrankTest : ObdTask
+    data class ScanPids(val from: Int, val to: Int) : ObdTask
+    data object SnapshotPids : ObdTask
+    data object ComparePids : ObdTask
     data class Terminal(val command: String) : ObdTask
 }
 
@@ -198,6 +221,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _battery = MutableStateFlow(BatteryState())
     val battery: StateFlow<BatteryState> = _battery.asStateFlow()
+
+    private val _pidScan = MutableStateFlow(PidScanState())
+    val pidScan: StateFlow<PidScanState> = _pidScan.asStateFlow()
 
     /**
      * Меняется при каждой правке своих расшифровок. Нужен только для того,
@@ -287,6 +313,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var crankTestRunning = false
+
+    @Volatile
+    private var pidScanStop = false
+
+    /** Снимок значений для сравнения "до и после". */
+    private var pidSnapshot: List<ScanHit> = emptyList()
     private val recorderLock = Any()
 
     @Volatile private var recording = false
@@ -756,6 +788,86 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         publishBattery(crankTestActive = false)
     }
 
+    /**
+     * Перебор заводских параметров.
+     *
+     * Идёт в той же корутине, что и опрос приборов: адаптер последовательный,
+     * и перебор всё равно занял бы его целиком. Приборы на это время замирают -
+     * это честнее, чем мешать два потока запросов в одном проводе.
+     */
+    private fun runPidScan(session: ObdSession, from: Int, to: Int) {
+        pidScanStop = false
+        val range = PidScan.clampRange(from, to)
+        _pidScan.value = PidScanState(running = true, total = range.size)
+        val hits = session.scanService22(
+            range.from,
+            range.to,
+            shouldStop = { pidScanStop },
+            onProgress = { done, total, _ ->
+                _pidScan.value = _pidScan.value.copy(done = done, total = total)
+            },
+        )
+        pidSnapshot = emptyList()
+        _pidScan.value = _pidScan.value.copy(
+            running = false,
+            hits = hits,
+            snapshotSize = 0,
+            changes = emptyList(),
+            message = getApplication<Application>().getString(
+                if (hits.isEmpty()) R.string.scan_none else R.string.scan_found,
+                hits.size,
+            ),
+        )
+    }
+
+    /** Перечитывает найденные параметры и показывает, что изменилось. */
+    private fun runPidCompare(session: ObdSession) {
+        val before = pidSnapshot
+        if (before.isEmpty()) return
+        pidScanStop = false
+        _pidScan.value = _pidScan.value.copy(running = true, done = 0, total = before.size)
+        val after = session.readService22(
+            before.map { it.pid },
+            shouldStop = { pidScanStop },
+        )
+        val changes = PidScan.compare(before, after)
+        _pidScan.value = _pidScan.value.copy(
+            running = false,
+            hits = after,
+            changes = changes,
+            message = getApplication<Application>().getString(
+                if (changes.isEmpty()) R.string.scan_no_change else R.string.scan_changed,
+                changes.size,
+            ),
+        )
+    }
+
+    /** Запускает перебор диапазона номеров. */
+    fun startPidScan(from: Int, to: Int) {
+        if (_pidScan.value.running) return
+        tasks.trySend(ObdTask.ScanPids(from, to))
+    }
+
+    fun stopPidScan() {
+        pidScanStop = true
+    }
+
+    /** Запоминает текущие значения, чтобы потом сравнить с ними. */
+    fun takePidSnapshot() {
+        tasks.trySend(ObdTask.SnapshotPids)
+    }
+
+    /** Перечитывает параметры и показывает разницу со снимком. */
+    fun comparePidSnapshot() {
+        if (_pidScan.value.running) return
+        tasks.trySend(ObdTask.ComparePids)
+    }
+
+    fun clearPidScan() {
+        pidSnapshot = emptyList()
+        _pidScan.value = PidScanState()
+    }
+
     private fun publishBattery(
         fromAdapter: Boolean = _battery.value.fromAdapter,
         crankTestActive: Boolean = _battery.value.crankTestActive,
@@ -916,6 +1028,19 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             ObdTask.RefreshVehicle -> loadVehicle(session)
 
             ObdTask.CrankTest -> runCrankTest(session)
+
+            is ObdTask.ScanPids -> runPidScan(session, task.from, task.to)
+
+            ObdTask.SnapshotPids -> {
+                pidSnapshot = _pidScan.value.hits
+                _pidScan.value = _pidScan.value.copy(
+                    snapshotSize = pidSnapshot.size,
+                    changes = emptyList(),
+                    message = null,
+                )
+            }
+
+            ObdTask.ComparePids -> runPidCompare(session)
 
             is ObdTask.Terminal -> {
                 val reply: ElmReply = session.raw(task.command)
