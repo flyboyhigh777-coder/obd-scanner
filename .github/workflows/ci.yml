@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    # Любая ветка, а не только main: приложение собирается и проходит тесты до
+    # того, как попадёт в main, и APK ветки можно скачать из артефактов сборки.
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Пуш в ветку с открытым pull request запускает сборку дважды - вторая отменяет
+# первую, вместо того чтобы занимать раннер той же работой.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Протокол ELM327/OBD-II, разбор PID, коды ошибок, VIN, итоги поездки -
+      # всё это чистый Kotlin и проверяется без эмулятора.
+      - name: Core unit tests
+        shell: bash
+        run: |
+          ./gradlew :core:test 2>&1 | tee core-test.log || {
+            echo "=== ОШИБКИ КОМПИЛЯЦИИ (:core) ==="
+            grep -E "^e: |^w: " core-test.log | head -40
+            exit 1
+          }
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          ./gradlew :app:assembleDebug 2>&1 | tee build.log || {
+            echo "=== ОШИБКИ КОМПИЛЯЦИИ (:app) ==="
+            grep -E "^e: " build.log | head -60
+            exit 1
+          }
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ObdScanner-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # Настоящее приложение (Activity + Compose + ViewModel) под Robolectric:
+      # проходит все экраны в демо-режиме и снимает скриншоты.
+      - name: App UI flow test
+        shell: bash
+        run: |
+          ./gradlew :app:testDebugUnitTest 2>&1 | tee ui-test.log || {
+            echo "=== ОШИБКИ КОМПИЛЯЦИИ ТЕСТА ==="
+            grep -E "^e: " ui-test.log | head -40
+            exit 1
+          }
+
+      # Выжимка из XML-отчётов: что за тест упал и с каким сообщением. Без неё в
+      # журнале остаётся только стек Gradle, по которому причину не найти.
+      - name: Show failed tests
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          found = False
+          for path in sorted(glob.glob('*/build/test-results/**/*.xml', recursive=True)):
+              for case in ET.parse(path).getroot().iter('testcase'):
+                  for bad in list(case.iter('failure')) + list(case.iter('error')):
+                      found = True
+                      print('=== УПАЛ:', case.get('classname'), '>', case.get('name'))
+                      print((bad.get('message') or '')[:2000])
+                      print((bad.text or '')[:6000])
+          if not found:
+              print('XML-отчётов с падениями нет - значит упала компиляция, смотрите строки "e:" выше.')
+          PY
+
+      # Стабильная ссылка на скачивание вместо GitHub Actions Artifacts: у
+      # артефактов подписанный URL с коротким сроком жизни, который мобильные
+      # браузеры скачивают через раз. Релиз с фиксированным тегом даёт обычную
+      # прямую ссылку, перезаписывается при каждой сборке в main.
+      - name: Publish debug APK to a stable GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete debug-latest --yes --cleanup-tag || true
+          gh release create debug-latest app/build/outputs/apk/debug/app-debug.apk \
+            --repo "${{ github.repository }}" \
+            --title "OBD Сканер - debug APK (последняя сборка)" \
+            --notes "Автосборка с main, коммит ${GITHUB_SHA}. Ссылка на этот релиз не меняется - обновляется при каждом пуше." \
+            --target "${GITHUB_SHA}"
+
+      - name: Publish screenshots to ci-screenshots branch
+        if: always() && github.ref == 'refs/heads/main'
+        working-directory: app/build
+        run: |
+          [ -d outputs/roborazzi ] || { echo "no screenshots"; exit 0; }
+          mkdir -p publish && cp outputs/roborazzi/*.png publish/ 2>/dev/null || true
+          [ -d reports/tests ] && cp -r reports/tests publish/test-report || true
+          cd publish
+          echo "Screenshots for ${GITHUB_SHA}" > README.md
+          git init -q -b ci-screenshots
+          git add -A
+          git -c user.name="ci" -c user.email="ci@users.noreply.github.com" commit -qm "Screenshots for ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-screenshots
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            core/build/reports/tests/
+            app/build/reports/tests/
+          if-no-files-found: ignore
