@@ -10,7 +10,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.obdscanner.app.data.DocumentationDtc
 import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.electrical.BatteryVerdict
@@ -155,14 +154,14 @@ class ObdAppFlowTest {
         // сохраниться в файл, а не остаться в памяти.
         vm.setDtcDescription("P1513", "Из руководства: РХХ, замыкание на массу")
         pumpUntil(20_000, "сохранение своей расшифровки") {
-            DocumentationDtc.userText("P1513") != null
+            Dtc("P1513").descriptionDetails.source == DtcTextSource.DOCUMENTATION
         }
         val own = Dtc("P1513").descriptionDetails
         assertEquals(DtcTextSource.DOCUMENTATION, own.source)
         assertEquals("Из руководства: РХХ, замыкание на массу", own.text)
         vm.clearDtcDescriptions()
         pumpUntil(20_000, "удаление своей расшифровки") {
-            DocumentationDtc.userText("P1513") == null
+            Dtc("P1513").descriptionDetails.source == DtcTextSource.MANUFACTURER
         }
         assertEquals(DtcTextSource.MANUFACTURER, Dtc("P1513").descriptionDetails.source)
         shot("06_dtc_list")

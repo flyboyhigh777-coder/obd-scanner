@@ -76,6 +76,7 @@ object DocumentationDtc {
         fromUser = fromUser.toMutableMap().apply {
             if (value.isEmpty()) remove(key) else put(key, value)
         }
+        publish()
         save(context)
     }
 
@@ -89,6 +90,7 @@ object DocumentationDtc {
         val parsed = ManufacturerDtc.parseDocumentationTable(text)
         if (parsed.isEmpty()) return 0
         fromUser = fromUser + parsed
+        publish()
         save(context)
         return parsed.size
     }
@@ -103,6 +105,11 @@ object DocumentationDtc {
 
     private fun userFile(context: Context) = File(context.filesDir, USER_FILE)
 
+    /**
+     * Запись файла. Справочник к этому моменту уже обновлён [publish]: сначала
+     * память, потом диск. Наоборот нельзя - между правкой и записью файла
+     * проходят миллисекунды, и всё это время экран показывал бы старый текст.
+     */
     private fun save(context: Context) {
         runCatching {
             val text = buildString {
@@ -114,7 +121,6 @@ object DocumentationDtc {
             }
             userFile(context).writeText(text)
         }
-        publish()
     }
 
     /** Карта в :core одна, поэтому оба источника сводятся здесь, а не там. */

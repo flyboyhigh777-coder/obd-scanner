@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,9 @@ import kotlin.math.sin
  * толстая и закрывает цифры. Дуга читается с одного взгляда, а точное значение
  * всё равно написано в центре.
  */
+/** Больше этого стрелочная шкала не растёт - см. комментарий внутри. */
+private val MAX_ARC_WIDTH = 260.dp
+
 @Composable
 fun ArcGauge(
     title: String,
@@ -48,6 +52,12 @@ fun ArcGauge(
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
+                // Предел по ширине - иначе на широком экране магнитолы шкала
+                // раздувается на всю высоту: она квадратная и растёт вместе с
+                // шириной, а ширины там втрое больше телефонной. Крупнее этого
+                // стрелка читаемее не становится, а место под остальные
+                // приборы кончается.
+                .widthIn(max = MAX_ARC_WIDTH)
                 .fillMaxWidth()
                 .aspectRatio(1.25f),
             contentAlignment = Alignment.Center
