@@ -65,6 +65,8 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     val performance by viewModel.performance.collectAsState()
     var chooser by remember { mutableStateOf(false) }
 
+    val columns = tileColumns()
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -150,7 +152,9 @@ fun DashboardScreen(viewModel: ObdViewModel) {
         selected
             .filter { it != Pids.RPM.id && it != Pids.SPEED.id }
             .mapNotNull { Pids.byId[it] }
-            .chunked(2)
+            // Сколько плиток в ряд - по ширине экрана: на магнитоле их влезает
+            // четыре, и цифры при этом остаются читаемыми с водительского места.
+            .chunked(columns)
             .forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     row.forEach { pid ->

@@ -8,15 +8,21 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,6 +33,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.ConnectScreen
@@ -34,6 +41,7 @@ import com.obdscanner.app.ui.DashboardScreen
 import com.obdscanner.app.ui.DtcScreen
 import com.obdscanner.app.ui.MeasureScreen
 import com.obdscanner.app.ui.VehicleScreen
+import com.obdscanner.app.ui.isWideScreen
 import com.obdscanner.app.ui.theme.Carbon
 import com.obdscanner.app.ui.theme.CarbonDeep
 import com.obdscanner.app.ui.theme.ObdScannerTheme
@@ -43,10 +51,15 @@ import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 
 /**
- * Единственная Activity. Пять вкладок внизу: связь, приборы, замеры, ошибки и
+ * Единственная Activity. Пять вкладок: связь, приборы, замеры, ошибки и
  * данные автомобиля. У всех общий [ObdViewModel] - связь с машиной одна, и
  * переключение вкладок не должно её рвать, а замеры разгона не должны
  * обнуляться от того, что человек заглянул в ошибки.
+ *
+ * Вкладки живут снизу на телефоне и сбоку на широком экране. Это не
+ * украшательство: у головного устройства в машине экран широкий и низкий
+ * (1024x600, 1280x720), и полоса навигации снизу съедает высоту, которой там
+ * и так мало.
  */
 class MainActivity : ComponentActivity() {
 
@@ -57,6 +70,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ObdScannerTheme {
                 var tab by rememberSaveable { mutableIntStateOf(0) }
+                KeepScreenOnWhileConnected(viewModel)
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -66,8 +80,9 @@ class MainActivity : ComponentActivity() {
                     // Surface), и без этого текст без явного color рисуется чёрным
                     // и исчезает на тёмном фоне.
                     CompositionLocalProvider(LocalContentColor provides TextBright) {
-                        Column(Modifier.fillMaxSize()) {
-                            Box(Modifier.weight(1f)) {
+                        val wide = isWideScreen()
+                        val content = @Composable { modifier: Modifier ->
+                            Box(modifier) {
                                 when (tab) {
                                     0 -> ConnectScreen(viewModel)
                                     1 -> DashboardScreen(viewModel)
@@ -76,42 +91,16 @@ class MainActivity : ComponentActivity() {
                                     else -> VehicleScreen(viewModel)
                                 }
                             }
-                            NavigationBar(containerColor = PanelFill, contentColor = TextBright) {
-                                NavigationBarItem(
-                                    selected = tab == 0,
-                                    onClick = { tab = 0 },
-                                    icon = { PlugIcon() },
-                                    label = { Text(stringResource(R.string.tab_connect)) },
-                                    colors = navColors()
-                                )
-                                NavigationBarItem(
-                                    selected = tab == 1,
-                                    onClick = { tab = 1 },
-                                    icon = { GaugeIcon() },
-                                    label = { Text(stringResource(R.string.tab_dashboard)) },
-                                    colors = navColors()
-                                )
-                                NavigationBarItem(
-                                    selected = tab == 2,
-                                    onClick = { tab = 2 },
-                                    icon = { RouteIcon() },
-                                    label = { Text(stringResource(R.string.tab_measure)) },
-                                    colors = navColors()
-                                )
-                                NavigationBarItem(
-                                    selected = tab == 3,
-                                    onClick = { tab = 3 },
-                                    icon = { WarningIcon() },
-                                    label = { Text(stringResource(R.string.tab_dtc)) },
-                                    colors = navColors()
-                                )
-                                NavigationBarItem(
-                                    selected = tab == 4,
-                                    onClick = { tab = 4 },
-                                    icon = { CarIcon() },
-                                    label = { Text(stringResource(R.string.tab_vehicle)) },
-                                    colors = navColors()
-                                )
+                        }
+                        if (wide) {
+                            Row(Modifier.fillMaxSize()) {
+                                TabRail(tab) { tab = it }
+                                content(Modifier.weight(1f))
+                            }
+                        } else {
+                            Column(Modifier.fillMaxSize()) {
+                                content(Modifier.weight(1f))
+                                TabBar(tab) { tab = it }
                             }
                         }
                     }
@@ -120,6 +109,91 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** Пять вкладок одним списком: порядок и подписи у полосы и у рейки общие. */
+private val TABS = listOf(
+    R.string.tab_connect,
+    R.string.tab_dashboard,
+    R.string.tab_measure,
+    R.string.tab_dtc,
+    R.string.tab_vehicle,
+)
+
+@Composable
+private fun TabIcon(index: Int) {
+    when (index) {
+        0 -> PlugIcon()
+        1 -> GaugeIcon()
+        2 -> RouteIcon()
+        3 -> WarningIcon()
+        else -> CarIcon()
+    }
+}
+
+/** Телефон в портрете: полоса снизу, под большой палец. */
+@Composable
+private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
+    NavigationBar(containerColor = PanelFill, contentColor = TextBright) {
+        TABS.forEachIndexed { index, title ->
+            NavigationBarItem(
+                selected = selected == index,
+                onClick = { onSelect(index) },
+                icon = { TabIcon(index) },
+                label = { Text(stringResource(title)) },
+                colors = navColors()
+            )
+        }
+    }
+}
+
+/**
+ * Широкий экран: рейка слева.
+ *
+ * Слева, а не справа, потому что в машине с левым рулём это ближняя к
+ * водителю сторона экрана, и до неё дотягиваться, не наклоняясь.
+ */
+@Composable
+private fun TabRail(selected: Int, onSelect: (Int) -> Unit) {
+    NavigationRail(containerColor = PanelFill, contentColor = TextBright) {
+        TABS.forEachIndexed { index, title ->
+            NavigationRailItem(
+                selected = selected == index,
+                onClick = { onSelect(index) },
+                icon = { TabIcon(index) },
+                label = { Text(stringResource(title)) },
+                colors = railColors()
+            )
+        }
+    }
+}
+
+/**
+ * Пока идёт связь с машиной, экран не гасим.
+ *
+ * На головном устройстве это обязательно: приборы, которые тухнут через
+ * минуту, бесполезны. На телефоне это тоже верно - человек смотрит на цифры, а
+ * не трогает экран, - но только пока есть подключение, иначе приложение просто
+ * сажало бы батарею.
+ */
+@Composable
+private fun KeepScreenOnWhileConnected(viewModel: ObdViewModel) {
+    val connection by viewModel.connection.collectAsState()
+    val view = LocalView.current
+    val connected = connection is ConnectionState.Connected
+    DisposableEffect(connected) {
+        view.keepScreenOn = connected
+        onDispose { view.keepScreenOn = false }
+    }
+}
+
+@Composable
+private fun railColors() = NavigationRailItemDefaults.colors(
+    selectedIconColor = TextBright,
+    selectedTextColor = TextBright,
+    unselectedIconColor = TextMuted,
+    unselectedTextColor = TextMuted,
+    indicatorColor = SegmentSelected.copy(alpha = 0.20f)
+)
 
 @Composable
 private fun navColors() = NavigationBarItemDefaults.colors(

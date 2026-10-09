@@ -42,12 +42,43 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Приложение полезно и без Bluetooth (Wi-Fi адаптер, демо-режим). -->
+    <!--
+      Ничего из железа приложение не требует обязательно - это важно не для
+      телефонов, а для головных устройств в машине (Teyes и подобные на
+      Android). У них набор железа урезанный, и любая строка uses-feature без
+      required="false" превращается в запрет на установку.
+
+      Отдельная ловушка - местоположение. Объявленное выше право
+      ACCESS_FINE_LOCATION само по себе подразумевает, что устройству нужны
+      android.hardware.location и location.gps. У магнитолы GPS-приёмник есть
+      не всегда (а на дешёвых моделях его нет совсем), и без явного
+      required="false" приложение туда просто не поставится - при том, что
+      местоположение ему не нужно вовсе и спрашивается только ради поиска
+      BLE-адаптеров на Android 8-11.
+    -->
     <uses-feature
         android:name="android.hardware.bluetooth"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.faketouch"
         android:required="false" />
 
     <application
@@ -58,11 +89,20 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ObdScanner">
+        <!--
+          Головное устройство держит приложение в своей оболочке и может менять
+          ему размер; без этого некоторые прошивки открывают его в маленьком
+          окне с чёрными полями.
+        -->
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="4.0" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden"
             android:theme="@style/Theme.ObdScanner">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
