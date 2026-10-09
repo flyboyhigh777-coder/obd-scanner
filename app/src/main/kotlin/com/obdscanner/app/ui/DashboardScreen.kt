@@ -36,6 +36,8 @@ import com.obdscanner.app.ui.theme.GaugeRed
 import com.obdscanner.app.ui.theme.GradientTopBar
 import com.obdscanner.app.ui.theme.Hint
 import com.obdscanner.app.ui.theme.Panel
+import com.obdscanner.app.ui.theme.tileColumns
+import com.obdscanner.app.ui.theme.uiScale
 import com.obdscanner.app.ui.theme.StatusDot
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.core.obd.ObdPid
@@ -66,13 +68,14 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     var chooser by remember { mutableStateOf(false) }
 
     val columns = tileColumns()
+    val scale = uiScale()
 
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(scale.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(scale.screenGap)
     ) {
         GradientTopBar(stringResource(R.string.dash_title), subtitle = profile.name)
 
@@ -106,7 +109,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
 
         // Обороты и скорость - отдельно и крупно: это то, на что смотрят на ходу.
         if (style == "DIGITAL") {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
                 ValueTile(
                     Pids.RPM.title,
                     rpm?.let { Format.value(Pids.RPM, it, units) } ?: dash,
@@ -119,7 +122,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                 )
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
                 MainGauge(Pids.RPM, rpm, units, profile, rpmAccent(rpm, profile), style, Modifier.weight(1f))
                 MainGauge(Pids.SPEED, speed, units, profile, GaugeBlue, style, Modifier.weight(1f))
             }
@@ -127,7 +130,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
 
         // Передача, запас хода и расход - то, чего нет ни в одном PID, но что
         // считается из них и профиля машины.
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
             ValueTile(
                 stringResource(R.string.dash_gear),
                 live.gear?.toString() ?: dash,
@@ -156,7 +159,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
             // четыре, и цифры при этом остаются читаемыми с водительского места.
             .chunked(columns)
             .forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
                     row.forEach { pid ->
                         val value = live.values[pid.id]
                         if (style == "BAR") {

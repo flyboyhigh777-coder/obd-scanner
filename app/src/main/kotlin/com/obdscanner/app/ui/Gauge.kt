@@ -26,6 +26,7 @@ import com.obdscanner.app.ui.theme.GaugeRed
 import com.obdscanner.app.ui.theme.Panel
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
+import com.obdscanner.app.ui.theme.uiScale
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -37,9 +38,6 @@ import kotlin.math.sin
  * толстая и закрывает цифры. Дуга читается с одного взгляда, а точное значение
  * всё равно написано в центре.
  */
-/** Больше этого стрелочная шкала не растёт - см. комментарий внутри. */
-private val MAX_ARC_WIDTH = 260.dp
-
 @Composable
 fun ArcGauge(
     title: String,
@@ -49,6 +47,7 @@ fun ArcGauge(
     accent: Color = GaugeCyan,
     modifier: Modifier = Modifier
 ) {
+    val scale = uiScale()
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
@@ -57,7 +56,7 @@ fun ArcGauge(
                 // шириной, а ширины там втрое больше телефонной. Крупнее этого
                 // стрелка читаемее не становится, а место под остальные
                 // приборы кончается.
-                .widthIn(max = MAX_ARC_WIDTH)
+                .widthIn(max = scale.arcWidth)
                 .fillMaxWidth()
                 .aspectRatio(1.25f),
             contentAlignment = Alignment.Center
@@ -107,15 +106,33 @@ fun ArcGauge(
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(valueText, style = MaterialTheme.typography.headlineMedium, color = TextBright)
+                Text(
+                    valueText,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = scale.gaugeValue,
+                        lineHeight = scale.gaugeValue * 1.15f,
+                    ),
+                    color = TextBright,
+                    maxLines = 1
+                )
                 if (unitText.isNotEmpty()) {
-                    Text(unitText, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                    Text(
+                        unitText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = scale.label,
+                lineHeight = scale.label * 1.3f,
+            ),
+                        color = TextMuted
+                    )
                 }
             }
         }
         Text(
             title,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = scale.label,
+                lineHeight = scale.label * 1.3f,
+            ),
             color = TextMuted,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 2.dp)
@@ -135,16 +152,29 @@ fun ValueTile(
     modifier: Modifier = Modifier,
     alert: Alert = Alert.NONE
 ) {
+    val scale = uiScale()
     Panel(modifier) {
-        Text(title, style = MaterialTheme.typography.bodySmall, color = TextMuted, maxLines = 2)
+        Text(
+            title,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = scale.label,
+                lineHeight = scale.label * 1.3f,
+            ),
+            color = TextMuted,
+            maxLines = 2
+        )
         Text(
             valueText,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = scale.value,
+                lineHeight = scale.value * 1.15f,
+            ),
             color = when (alert) {
                 Alert.NONE -> TextBright
                 Alert.WARNING -> GaugeAmber
                 Alert.DANGER -> GaugeRed
-            }
+            },
+            maxLines = 1
         )
     }
 }
@@ -164,9 +194,26 @@ fun BarGauge(
     accent: Color = GaugeCyan,
     modifier: Modifier = Modifier
 ) {
+    val scale = uiScale()
     Panel(modifier) {
-        Text(title, style = MaterialTheme.typography.bodySmall, color = TextMuted, maxLines = 1)
-        Text(valueText, style = MaterialTheme.typography.titleLarge, color = TextBright)
+        Text(
+            title,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = scale.label,
+                lineHeight = scale.label * 1.3f,
+            ),
+            color = TextMuted,
+            maxLines = 1
+        )
+        Text(
+            valueText,
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = scale.value,
+                lineHeight = scale.value * 1.15f,
+            ),
+            color = TextBright,
+            maxLines = 1
+        )
         Canvas(
             Modifier
                 .fillMaxWidth()

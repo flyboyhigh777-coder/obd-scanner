@@ -47,15 +47,17 @@ fun GradientTopBar(title: String, subtitle: String? = null, modifier: Modifier =
 /** Карточка-панель: полупрозрачная заливка и тонкая обводка поверх графита. */
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    // На магнитоле отступы меньше: место нужно цифрам, а не воздуху.
+    val scale = uiScale()
     Box(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(PanelFill)
             .border(1.dp, PanelBorder, RoundedCornerShape(18.dp))
-            .padding(14.dp)
+            .padding(scale.panelPadding)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        Column(verticalArrangement = Arrangement.spacedBy(scale.panelGap), content = content)
     }
 }
 

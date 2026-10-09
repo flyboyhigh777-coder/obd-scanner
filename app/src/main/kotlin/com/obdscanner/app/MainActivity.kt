@@ -41,10 +41,10 @@ import com.obdscanner.app.ui.DashboardScreen
 import com.obdscanner.app.ui.DtcScreen
 import com.obdscanner.app.ui.MeasureScreen
 import com.obdscanner.app.ui.VehicleScreen
-import com.obdscanner.app.ui.isWideScreen
 import com.obdscanner.app.ui.theme.Carbon
 import com.obdscanner.app.ui.theme.CarbonDeep
 import com.obdscanner.app.ui.theme.ObdScannerTheme
+import com.obdscanner.app.ui.theme.isWideScreen
 import com.obdscanner.app.ui.theme.PanelFill
 import com.obdscanner.app.ui.theme.SegmentSelected
 import com.obdscanner.app.ui.theme.TextBright

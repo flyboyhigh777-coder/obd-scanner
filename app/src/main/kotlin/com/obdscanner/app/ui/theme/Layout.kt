@@ -1,8 +1,13 @@
-package com.obdscanner.app.ui
+package com.obdscanner.app.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Ширина экрана - от неё зависит и навигация, и число колонок.
@@ -59,3 +64,58 @@ fun tileColumns(): Int {
         else -> 2
     }
 }
+
+/**
+ * Размеры под то, как на экран смотрят.
+ *
+ * На телефоне его держат в руках и разглядывают. На магнитоле в него
+ * заглядывают боковым зрением на ходу, с расстояния вытянутой руки и в
+ * трясущейся машине - и там решает не красота, а то, читается ли цифра за
+ * полсекунды. Поэтому на широком экране значения заметно крупнее, а отступы,
+ * наоборот, меньше: чем плотнее, тем больше параметров видно без прокрутки, а
+ * прокручивать за рулём нельзя.
+ *
+ * Подписи не растут вместе со значениями: их читают один раз, когда
+ * разбираются, что где, и крупными они только отнимали бы место у цифр.
+ */
+@Immutable
+data class UiScale(
+    /** Значение в плитке - самое важное число на экране. */
+    val value: TextUnit,
+    /** Число внутри круглой шкалы. */
+    val gaugeValue: TextUnit,
+    /** Подпись над значением. */
+    val label: TextUnit,
+    val panelPadding: Dp,
+    val panelGap: Dp,
+    val screenPadding: Dp,
+    val screenGap: Dp,
+    /** Больше этого круглая шкала не растёт. */
+    val arcWidth: Dp,
+)
+
+private val PHONE_SCALE = UiScale(
+    value = 22.sp,
+    gaugeValue = 28.sp,
+    label = 12.sp,
+    panelPadding = 14.dp,
+    panelGap = 8.dp,
+    screenPadding = 14.dp,
+    screenGap = 12.dp,
+    arcWidth = 260.dp,
+)
+
+private val CAR_SCALE = UiScale(
+    value = 32.sp,
+    gaugeValue = 48.sp,
+    label = 13.sp,
+    panelPadding = 10.dp,
+    panelGap = 4.dp,
+    screenPadding = 10.dp,
+    screenGap = 8.dp,
+    arcWidth = 300.dp,
+)
+
+@Composable
+@ReadOnlyComposable
+fun uiScale(): UiScale = if (isWideScreen()) CAR_SCALE else PHONE_SCALE
