@@ -244,6 +244,11 @@ class SimulatedEcu(
     }
 
     private fun respondCurrentData(command: String): String {
+        // Пакетный запрос: "010C0D05" - несколько номеров одной командой.
+        // Живой ЭБУ отвечает на такое одним сообщением, подряд парами
+        // "номер - значение"; так же отвечаем и здесь.
+        val numbers = command.drop(2).chunked(2).mapNotNull { it.toIntOrNull(16) }
+        if (numbers.size > 1) return respondMultiple(numbers)
         val pid = command.drop(2).take(2).toIntOrNull(16) ?: return prompt("?\r")
         if (pid in PidSupport.RANGE_PIDS) {
             // Карту диапазона машина отдаёт только если этот диапазон вообще есть:
@@ -287,6 +292,22 @@ class SimulatedEcu(
 
     /** Старший байт, младший байт - так ЭБУ передаёт двухбайтные значения. */
     private fun two(value: Int) = intArrayOf((value shr 8) and 0xFF, value and 0xFF)
+
+    /** Ответ на пакетный запрос: номера и значения подряд, одним сообщением. */
+    private fun respondMultiple(pids: List<Int>): String {
+        val t = seconds()
+        val body = ArrayList<Int>()
+        body.add(0x41)
+        for (pid in pids) {
+            if (pid in PidSupport.RANGE_PIDS || pid !in supported) continue
+            val data = encodeValue(pid, t) ?: continue
+            body.add(pid)
+            data.forEach { body.add(it) }
+        }
+        // Один только заголовок - значит не нашлось ни одного известного номера.
+        if (body.size == 1) return noData()
+        return frame(body.toIntArray())
+    }
 
     /** Значение PID, упакованное в байты ровно так, как это делает ЭБУ. */
     private fun encodeValue(pid: Int, t: Double): IntArray? {

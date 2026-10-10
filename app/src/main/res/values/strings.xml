@@ -39,7 +39,7 @@
     <string name="connect_pid_count">Параметров поддерживается</string>
     <string name="connect_settings">Настройки</string>
     <string name="connect_poll_interval">Период опроса: %1$d мс</string>
-    <string name="connect_poll_hint">Чем короче период, тем живее стрелки. Дешёвые адаптеры на коротком периоде начинают терять ответы — если значения замирают, увеличьте.</string>
+    <string name="connect_poll_hint">Это пауза между циклами, а не скорость опроса: сам обмен с адаптером стоит 25–60 мс и обычно и определяет частоту. Ноль — без паузы. Дешёвые адаптеры без паузы начинают терять ответы — если значения замирают, увеличьте.</string>
     <string name="connect_units">Единицы измерения</string>
     <string name="connect_units_metric">Метрические</string>
     <string name="connect_units_imperial">Имперские</string>
@@ -290,4 +290,8 @@
     <string name="leak_days">Простоит, суток</string>
     <string name="leak_days_hint">До заряда 50 %%, ниже которого зимой можно не завестись. Считано от текущих %1$d %%, без поправки на мороз и саморазряд — в холод будет меньше.</string>
     <string name="vehicle_battery_ah">Ёмкость АКБ, А·ч</string>
+    <string name="connect_rate">Фактически</string>
+    <string name="connect_rate_value">%1$.1f раз/с (%2$d мс)</string>
+    <string name="connect_batched">Приборы спрашиваются пакетом — все за один обмен с адаптером. Это самый быстрый режим.</string>
+    <string name="connect_not_batched">Пакетный запрос не поддержан этим адаптером или блоком — приборы спрашиваются по одному, и цикл во столько же раз длиннее.</string>
 </resources>

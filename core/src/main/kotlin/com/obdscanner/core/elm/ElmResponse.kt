@@ -1,5 +1,7 @@
 package com.obdscanner.core.elm
 
+import com.obdscanner.core.obd.ObdPid
+
 /**
  * Ошибки, о которых ELM327 сообщает текстом вместо данных. Разделять их важно:
  * NO_DATA - нормальная ситуация (машина не поддерживает этот PID), а
@@ -217,6 +219,41 @@ object ObdPayload {
      * (расширенные параметры производителя) номер параметра двухбайтный, и
      * ответ выглядит как `62 11 48 xx yy`.
      */
+    /**
+     * Разбор ответа на пакетный запрос: "41 0C 1A F8 0D 00 05 5A".
+     *
+     * ЭБУ отвечает подряд парами "номер параметра - его байты", без всяких
+     * разделителей. Разрезать такую строку можно только зная, сколько байт
+     * занимает каждый параметр - это [ObdPid.dataBytes], поэтому сюда и
+     * передаются сами описания, а не одни номера.
+     *
+     * Порядок ответа не обязан совпадать с порядком запроса, а часть
+     * параметров блок может и не прислать - поэтому возвращается карта, и
+     * вызывающий сам видит, чего не хватает.
+     */
+    fun multi(reply: ElmReply, service: Int, requested: List<ObdPid>): Map<Int, IntArray> {
+        if (reply.isError) return emptyMap()
+        val answer = service + 0x40
+        val wanted = requested.associateBy { it.id }
+        val out = LinkedHashMap<Int, IntArray>()
+        for (frame in frames(reply)) {
+            var i = frame.indexOf(answer)
+            if (i < 0) continue
+            i++
+            // Встретив незнакомый номер, дальше идти нельзя: без длины
+            // неизвестно, где кончается его значение и начинается следующее.
+            while (i < frame.size) {
+                val pid = wanted[frame[i]] ?: break
+                val from = i + 1
+                val to = from + pid.dataBytes
+                if (to > frame.size) break
+                out[pid.id] = frame.copyOfRange(from, to)
+                i = to
+            }
+        }
+        return out
+    }
+
     fun data(reply: ElmReply, service: Int, pidBytes: IntArray, expectedBytes: Int? = null): IntArray? {
         if (reply.isError) return null
         val answer = service + 0x40

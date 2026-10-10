@@ -91,9 +91,20 @@ data class LiveSnapshot(
     /** Включённая передача, если её удалось распознать. */
     val gear: Int? = null,
     val monitor: MonitorStatus? = null,
-    val updatedAtMillis: Long = 0
+    val updatedAtMillis: Long = 0,
+    /**
+     * Сколько заняло последнее обновление, мс. Показывается рядом с ползунком
+     * периода: без этого числа непонятно, что упирается не в настройку, а в
+     * сам обмен с адаптером.
+     */
+    val cycleMillis: Long = 0,
+    /** Удалось ли спрашивать параметры пакетом - от этого зависит скорость. */
+    val batched: Boolean = false,
 ) {
     val hasData: Boolean get() = values.isNotEmpty()
+
+    /** Обновлений в секунду - так понятнее, чем миллисекунды. */
+    val hz: Double? get() = if (cycleMillis > 0) 1000.0 / cycleMillis else null
 }
 
 /** Ошибки: три режима чтения, стоп-кадр и бортовые тесты. */
@@ -697,6 +708,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 handle(task, session)
                 continue
             }
+            val startedAt = System.currentTimeMillis()
             val pids = pollList(session)
             val values = if (pids.isEmpty()) emptyMap() else session.readAll(pids)
             if (values.isEmpty() && pids.isNotEmpty()) {
@@ -711,12 +723,16 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 emptyCycles = 0
             }
-            readBatteryVoltage(session, values[Pids.RPM.id])
+            // Напряжение - отдельная команда поверх приборов, и теперь, когда
+            // сами приборы приходят одним пакетом, она заметна. Меняется оно
+            // медленно, поэтому спрашиваем реже: иначе цикл удваивается ради
+            // числа, которое дрожит в третьем знаке.
+            if (cycle % VOLTAGE_EVERY == 0) readBatteryVoltage(session, values[Pids.RPM.id])
             val custom = readCustomPids(session)
             // Статус лампы Check Engine меняется редко - спрашиваем его не каждый
             // цикл, чтобы не отнимать время у приборов.
             val monitor = if (cycle % MONITOR_EVERY == 0) session.readMonitorStatus() else _live.value.monitor
-            publish(values, custom, monitor)
+            publish(values, custom, monitor, System.currentTimeMillis() - startedAt, session.multiPidSupported)
             cycle++
             delay(_pollInterval.value.toLong())
         }
@@ -910,7 +926,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     val voltageCalibration: Double get() = voltageOffset
 
-    private fun publish(values: Map<Int, Double>, custom: Map<String, Double>, monitor: MonitorStatus?) {
+    private fun publish(
+        values: Map<Int, Double>,
+        custom: Map<String, Double>,
+        monitor: MonitorStatus?,
+        cycleMillis: Long = 0,
+        batched: Boolean = false,
+    ) {
         val now = System.currentTimeMillis()
         val vehicle = _profile.value
         // Скорость с шины считается для заводской шины: если стоят другие,
@@ -960,7 +982,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             rangeKm = range,
             gear = gear,
             monitor = monitor,
-            updatedAtMillis = now
+            updatedAtMillis = now,
+            cycleMillis = cycleMillis,
+            batched = batched,
         )
         if (recording && values.isNotEmpty()) {
             synchronized(recorderLock) { recorder.add(now, _live.value.values) }
@@ -1097,6 +1121,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Раз во столько циклов перечитывается статус лампы Check Engine. */
         const val MONITOR_EVERY = 20
+
+        /**
+         * Раз во столько циклов перечитывается напряжение. Это отдельная
+         * команда, а меняется оно медленно - каждый цикл на него тратиться
+         * незачем.
+         */
+        const val VOLTAGE_EVERY = 5
 
         const val TERMINAL_LINES = 40
 

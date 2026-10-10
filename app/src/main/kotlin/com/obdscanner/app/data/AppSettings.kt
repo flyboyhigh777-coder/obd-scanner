@@ -204,7 +204,13 @@ class AppSettings(context: Context) {
         const val KEY_CUSTOM_PIDS = "custom_pids"
 
         const val DEFAULT_POLL = 300
-        const val MIN_POLL = 100
+        /**
+         * Ноль - "без паузы": опрос идёт так быстро, как отвечает адаптер.
+         * Раньше здесь стояло 100 мс, но это ограничение было бессмысленным:
+         * один обмен с адаптером стоит 25-60 мс, и с пакетным запросом именно
+         * он задаёт скорость, а не пауза между циклами.
+         */
+        const val MIN_POLL = 0
         const val MAX_POLL = 2000
         const val DEFAULT_HOST = "192.168.0.10"
         const val DEFAULT_PORT = 35000

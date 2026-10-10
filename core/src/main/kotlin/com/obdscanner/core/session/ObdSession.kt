@@ -152,12 +152,54 @@ class ObdSession(
     }
 
     /** Несколько значений подряд; PID, на которые машина не ответила, в результат не попадают. */
+    /**
+     * Читает набор параметров за минимальное число обменов с адаптером.
+     *
+     * Сначала пробуем пакетный запрос: шесть параметров одной командой вместо
+     * шести команд. Это единственное, что реально ускоряет опрос - каждый
+     * обмен стоит 25-60 мс кругом через адаптер, шину и ЭБУ, и на шести
+     * приборах по одному набегает треть секунды.
+     *
+     * Пакетный запрос понимают не все: часть дешёвых клонов ELM327 отвечает на
+     * него мусором, а некоторые блоки - отказом. Поэтому при первой же неудаче
+     * режим выключается до конца сессии и дальше всё читается по одному: лучше
+     * медленно, чем неправильно.
+     */
     fun readAll(pids: List<ObdPid>): Map<Int, Double> {
         val out = LinkedHashMap<Int, Double>()
-        for (pid in pids) {
-            read(pid)?.let { out[pid.id] = it }
+        val missing = ArrayList<ObdPid>()
+
+        if (multiPidWorks && pids.size > 1) {
+            var gotAnything = false
+            for (chunk in pids.chunked(Elm.MAX_PIDS_PER_REQUEST)) {
+                val raw = readMulti(chunk)
+                if (raw.isNotEmpty()) gotAnything = true
+                for (pid in chunk) {
+                    val bytes = raw[pid.id]
+                    if (bytes == null) missing.add(pid) else pid.decode(bytes)?.let { out[pid.id] = it }
+                }
+            }
+            if (!gotAnything) {
+                // Ни одного ответа на пакетный запрос - этот адаптер или блок
+                // его не умеет. Второй раз не пробуем.
+                multiPidWorks = false
+                missing.clear()
+                missing.addAll(pids)
+            }
+        } else {
+            missing.addAll(pids)
         }
+
+        for (pid in missing) read(pid)?.let { out[pid.id] = it }
         return out
+    }
+
+    /** Поддерживает ли эта связка адаптер+блок пакетный запрос. */
+    val multiPidSupported: Boolean get() = multiPidWorks
+
+    private fun readMulti(pids: List<ObdPid>): Map<Int, IntArray> {
+        val reply = adapter.request(Elm.request(0x01, pids.map { it.id }), timeoutMillis = 1500)
+        return ObdPayload.multi(reply, 0x01, pids)
     }
 
     /** Сырые байты ответа - нужны статусу тестов и диагностическому терминалу. */
@@ -305,6 +347,12 @@ class ObdSession(
     /** Произвольная команда - для экрана "Терминал". */
     fun raw(command: String, timeoutMillis: Long = 3000): ElmReply =
         adapter.request(command.trim().uppercase(), timeoutMillis)
+
+    /**
+     * Выключается навсегда при первой неудаче пакетного запроса: пересматривать
+     * решение посреди поездки незачем, адаптер в ней не меняется.
+     */
+    private var multiPidWorks = true
 
     override fun close() = adapter.close()
 

@@ -341,10 +341,26 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             Slider(
                 value = pollInterval.toFloat(),
                 onValueChange = { viewModel.setPollInterval(it.toInt()) },
-                valueRange = 100f..1500f,
-                steps = 13
+                valueRange = 0f..1500f,
+                steps = 14
             )
             Hint(stringResource(R.string.connect_poll_hint))
+
+            // Настоящая частота важнее настройки: упирается всё в обмен с
+            // адаптером, а не в паузу между циклами, и увидеть это можно
+            // только на живой машине.
+            val live by viewModel.live.collectAsState()
+            live.hz?.let { hz ->
+                InfoRow(
+                    stringResource(R.string.connect_rate),
+                    stringResource(R.string.connect_rate_value, hz, live.cycleMillis)
+                )
+                Hint(
+                    stringResource(
+                        if (live.batched) R.string.connect_batched else R.string.connect_not_batched
+                    )
+                )
+            }
 
             Text(stringResource(R.string.connect_units), color = TextBright)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
