@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeCyan
@@ -154,6 +155,11 @@ fun ValueTile(
 ) {
     val scale = uiScale()
     Panel(modifier) {
+        // Ровно две строки, даже если заголовок короткий. Иначе "Расход" даёт
+        // плитку на строку ниже, чем соседняя "Коррекция топлива, долгая
+        // (банк 1)", значения в ряду встают на разной высоте, и вся сетка
+        // выглядит кривой. Пустая вторая строка - честная плата за то, что
+        // цифры в ряду читаются одним движением глаз.
         Text(
             title,
             style = MaterialTheme.typography.bodySmall.copy(
@@ -161,7 +167,9 @@ fun ValueTile(
                 lineHeight = scale.label * 1.3f,
             ),
             color = TextMuted,
-            maxLines = 2
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             valueText,
@@ -203,7 +211,9 @@ fun BarGauge(
                 lineHeight = scale.label * 1.3f,
             ),
             color = TextMuted,
-            maxLines = 1
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             valueText,
