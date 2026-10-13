@@ -115,6 +115,13 @@ data class LiveSnapshot(
     val slowMillis: Long = 0,
     /** Удалось ли спрашивать параметры пакетом - от этого зависит скорость. */
     val batched: Boolean = false,
+    /**
+     * Расход не измерен, а посчитан из давления во впуске - на машинах без
+     * расходомера иначе никак. Экран обязан про это сказать: это оценка.
+     */
+    val consumptionEstimated: Boolean = false,
+    /** Параметры, которые машина не отдаёт: показываем причину, а не прочерк. */
+    val unanswered: Set<Int> = emptySet(),
 ) {
     val hasData: Boolean get() = values.isNotEmpty()
 
@@ -307,6 +314,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _textScale = MutableStateFlow(settings.textScale)
     val textScale: StateFlow<Float> = _textScale.asStateFlow()
+
+    private val _volumetricEfficiency = MutableStateFlow(settings.volumetricEfficiencyPercent)
+    val volumetricEfficiency: StateFlow<Float> = _volumetricEfficiency.asStateFlow()
 
     private val _profile = MutableStateFlow(settings.vehicleProfile())
     val profile: StateFlow<VehicleProfile> = _profile.asStateFlow()
@@ -530,6 +540,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     fun setPollInterval(millis: Int) {
         settings.pollIntervalMillis = millis
         _pollInterval.value = settings.pollIntervalMillis
+    }
+
+    /** Коэффициент наполнения, проценты - подгонка расчёта расхода под мотор. */
+    fun setVolumetricEfficiency(percent: Float) {
+        settings.volumetricEfficiencyPercent = percent
+        _volumetricEfficiency.value = settings.volumetricEfficiencyPercent
     }
 
     /** Размер текста во всём приложении - множитель к системному. */
@@ -814,6 +830,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 workMillis = if (fastMillis > 0) fastWork else work,
                 slowMillis = slowMillis,
                 batched = session.multiPidSupported,
+                unanswered = session.unansweredPids,
             )
             cycle++
             delay(pause)
@@ -1050,6 +1067,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         workMillis: Long = 0,
         slowMillis: Long = 0,
         batched: Boolean = false,
+        unanswered: Set<Int> = emptySet(),
     ) {
         val now = System.currentTimeMillis()
         val vehicle = _profile.value
@@ -1057,8 +1075,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         // настоящая скорость отличается, и все расчёты должны идти по ней.
         val rawSpeed = values[Pids.SPEED.id]
         val speed = rawSpeed?.times(vehicle.speedCorrection)
+        // Третий путь - для машин, у которых нет ни расходомера, ни PID
+        // расхода. ЗМЗ-409 именно такой: воздух он считает сам по давлению во
+        // впуске, а наружу не отдаёт ни того, ни другого.
+        var estimated = false
         val litresPerHour = values[Pids.FUEL_RATE.id]
             ?: values[Pids.MAF.id]?.let { FuelEconomy.litresPerHourFromMaf(it, dieselFuel) }
+            ?: litresPerHourFromManifold(values, vehicle)?.also { estimated = true }
         val litresPer100 = if (litresPerHour != null && speed != null) {
             FuelEconomy.litresPer100Km(litresPerHour, speed)
         } else {
@@ -1105,6 +1128,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             workMillis = workMillis,
             slowMillis = slowMillis,
             batched = batched,
+            consumptionEstimated = estimated,
+            unanswered = unanswered,
         )
         if (recording && values.isNotEmpty()) {
             synchronized(recorderLock) { recorder.add(now, _live.value.values) }
@@ -1122,7 +1147,16 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         val ids = LinkedHashSet(chosen)
         ids.add(Pids.SPEED.id)
         ids.add(Pids.RPM.id)
-        if (session.supports(Pids.FUEL_RATE.id)) ids.add(Pids.FUEL_RATE.id) else ids.add(Pids.MAF.id)
+        // Чем считать расход. Прямой PID лучше всего, расходомер - следом, а
+        // если нет ни того, ни другого (ЗМЗ-409), остаётся давление во впуске.
+        when {
+            session.supports(Pids.FUEL_RATE.id) -> ids.add(Pids.FUEL_RATE.id)
+            session.supports(Pids.MAF.id) -> ids.add(Pids.MAF.id)
+            else -> {
+                ids.add(Pids.INTAKE_MAP.id)
+                ids.add(Pids.INTAKE_TEMP.id)
+            }
+        }
         if (session.supports(Pids.FUEL_LEVEL.id)) ids.add(Pids.FUEL_LEVEL.id)
         // Выбранное руками спрашиваем, даже если машина про этот параметр не
         // сообщала: блоки бывают скромные и отдают больше, чем заявляют. А вот
@@ -1226,6 +1260,30 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             fuelType = fuelType,
             counters = counters
         )
+    }
+
+    /**
+     * Расход из давления во впуске - когда взять его больше неоткуда.
+     *
+     * Температуру воздуха берём из машины, а если и её нет - двадцать
+     * градусов: ошибка в десять градусов даёт около трёх процентов по
+     * расходу, а отсутствие числа не даёт ничего.
+     */
+    private fun litresPerHourFromManifold(
+        values: Map<Int, Double>,
+        vehicle: VehicleProfile,
+    ): Double? {
+        val rpm = values[Pids.RPM.id] ?: return null
+        val manifold = values[Pids.INTAKE_MAP.id] ?: return null
+        val intakeTemp = values[Pids.INTAKE_TEMP.id] ?: 20.0
+        val maf = FuelEconomy.mafFromMap(
+            rpm = rpm,
+            mapKpa = manifold,
+            intakeTempC = intakeTemp,
+            displacementL = vehicle.displacementL,
+            volumetricEfficiency = _volumetricEfficiency.value / 100.0,
+        ) ?: return null
+        return FuelEconomy.litresPerHourFromMaf(maf, dieselFuel)
     }
 
     /**

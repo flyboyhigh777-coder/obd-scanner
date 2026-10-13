@@ -24,6 +24,20 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(MIN_POLL, MAX_POLL)).apply()
 
     /**
+     * Коэффициент наполнения цилиндров, проценты.
+     *
+     * Нужен только машинам без расходомера: там расход считается из давления
+     * во впуске, и этот коэффициент - единственное, чем расчёт подгоняется под
+     * конкретный мотор. Подгоняется по заправкам: показало меньше, чем
+     * съелось, - поднять.
+     */
+    var volumetricEfficiencyPercent: Float
+        get() = prefs.getFloat(KEY_VOLUMETRIC, 80f).coerceIn(MIN_VE_PERCENT, MAX_VE_PERCENT)
+        set(value) = prefs.edit()
+            .putFloat(KEY_VOLUMETRIC, value.coerceIn(MIN_VE_PERCENT, MAX_VE_PERCENT))
+            .apply()
+
+    /**
      * Множитель размера текста во всём приложении.
      *
      * Системную настройку шрифта он не заменяет, а умножает: на магнитоле
@@ -195,6 +209,7 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putString(KEY_DASH, value.joinToString(",")).apply()
 
     private companion object {
+        const val KEY_VOLUMETRIC = "volumetric_efficiency"
         const val KEY_TEXT_SCALE = "text_scale"
         const val KEY_POLL = "poll_interval"
         const val KEY_IMPERIAL = "imperial"
@@ -224,6 +239,9 @@ class AppSettings(context: Context) {
          * один обмен с адаптером стоит 25-60 мс, и с пакетным запросом именно
          * он задаёт скорость, а не пауза между циклами.
          */
+        const val MIN_VE_PERCENT = 40f
+        const val MAX_VE_PERCENT = 120f
+
         /** Меньше единицы не даём: мельче системного уже нечитаемо. */
         const val MIN_TEXT_SCALE = 1.0f
 

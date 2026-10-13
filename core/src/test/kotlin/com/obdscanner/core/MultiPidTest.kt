@@ -195,6 +195,48 @@ class MultiPidTest {
     }
 
     /**
+     * Параметр, которого в машине нет, перестаёт отнимать время.
+     *
+     * Это не теория: человек включает в приборы "показать все", половина
+     * номеров машиной не поддерживается, и каждый из них добавляет по обмену
+     * в каждый цикл - ровно та скорость, ради которой всё и делалось.
+     */
+    @Test
+    fun pidsTheCarIgnoresAreDropped() {
+        val clock = FakeClock()
+        val counting = CountingEcu(SimulatedEcu(clock = clock::now))
+        val obd = session(counting, clock)
+        // 0x0A (давление топлива) виртуальная машина не поддерживает, 0x0C - да.
+        val pids = listOf(Pids.RPM, Pids.FUEL_PRESSURE)
+
+        repeat(5) { obd.readAll(pids) }
+        assertTrue("неотвечающий номер отмечен", Pids.FUEL_PRESSURE.id in obd.unansweredPids)
+        assertFalse("а работающий - нет", Pids.RPM.id in obd.unansweredPids)
+
+        counting.commands = 0
+        val values = obd.readAll(pids)
+        assertEquals("обороты по-прежнему читаются", 1, values.size)
+        assertTrue("и это именно обороты", Pids.RPM.id in values)
+        assertEquals("один обмен вместо двух", 1, counting.commands)
+    }
+
+    /** Обрыв связи - не повод списывать параметры: молчат ведь все сразу. */
+    @Test
+    fun silenceOnTheWholeBusDropsNothing() {
+        val clock = FakeClock()
+        val flaky = FlakyBatch(SimulatedEcu(clock = clock::now))
+        val obd = session(flaky, clock)
+        val pids = listOf(Pids.RPM, Pids.SPEED, Pids.COOLANT_TEMP)
+
+        flaky.silent = true
+        repeat(6) { obd.readAll(pids) }
+        assertTrue("никого не списали: ${obd.unansweredPids}", obd.unansweredPids.isEmpty())
+
+        flaky.silent = false
+        assertEquals("связь вернулась - читается всё", 3, obd.readAll(pids).size)
+    }
+
+    /**
      * Канал, который может не отвечать на пакетные запросы (команда длиннее
      * одного номера) или молчать вообще - как молчит шина при обрыве.
      */

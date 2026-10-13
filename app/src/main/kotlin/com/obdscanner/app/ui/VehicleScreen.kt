@@ -300,6 +300,15 @@ private fun ProfileEditor(viewModel: ObdViewModel) {
         decimals = 0,
         modifier = Modifier.fillMaxWidth()
     ) { viewModel.updateProfile(batteryAh = it) }
+    // Единственная подгонка расчёта расхода для машин без расходомера.
+    val efficiency by viewModel.volumetricEfficiency.collectAsState()
+    NumberField(
+        label = stringResource(R.string.vehicle_volumetric),
+        value = efficiency.toDouble(),
+        decimals = 0,
+        modifier = Modifier.fillMaxWidth()
+    ) { viewModel.setVolumetricEfficiency(it.toFloat()) }
+    Hint(stringResource(R.string.vehicle_volumetric_hint))
     OutlinedTextField(
         value = tyreText,
         onValueChange = { text ->

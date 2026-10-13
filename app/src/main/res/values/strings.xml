@@ -62,6 +62,9 @@
     <string name="dash_choose_hint">В списке только то, что отдаёт эта машина. Остальные параметры стандарта она не поддерживает.</string>
     <string name="dash_consumption_moving">Расход в движении</string>
     <string name="dash_consumption_idle">Расход на холостых</string>
+    <string name="dash_consumption_estimated_mark"> (расчётный)</string>
+    <string name="dash_consumption_estimated_hint">У этого мотора нет ни расходомера, ни готового расхода в OBD-II — приложение считает его из давления во впуске, оборотов и температуры. Это оценка: сверьте с заправкой и подкрутите «Коэффициент наполнения» на вкладке «Авто».</string>
+    <string name="dash_no_answer">не отвечает</string>
     <string name="dash_consumption_average">Средний за поездку</string>
     <string name="dash_fuel_used">Израсходовано</string>
     <string name="dash_trip_distance">Пройдено</string>
@@ -221,6 +224,8 @@
     <string name="vehicle_mass">Снаряжённая масса, кг</string>
     <string name="vehicle_payload">Люди и груз, кг</string>
     <string name="vehicle_redline">Красная зона, об/мин</string>
+    <string name="vehicle_volumetric" formatted="false">Коэффициент наполнения, %</string>
+    <string name="vehicle_volumetric_hint">Только для расчёта расхода на моторах без расходомера. 80 — середина для атмосферного двигателя. Заправились и увидели, что приложение показало меньше реального, — поднимите; показало больше — опустите.</string>
     <string name="vehicle_tyre">Шины</string>
     <string name="vehicle_tyre_bad">Не похоже на типоразмер - ожидается вид 245/70R16</string>
     <string name="vehicle_profile_reset">Вернуть значения профиля</string>

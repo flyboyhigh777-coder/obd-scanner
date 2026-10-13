@@ -4,8 +4,10 @@ import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdPayload
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.Formula
+import com.obdscanner.core.obd.FuelEconomy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -131,4 +133,42 @@ class FormulaTest {
         assertFalse(CustomPid("плохой режим", 0x03, 0x0C, 2, "A").valid)
         assertFalse(CustomPid("много байт", 0x01, 0x0C, 99, "A").valid)
     }
+    /**
+     * Расход по давлению во впуске - единственный способ показать расход на
+     * машине без расходомера. Проверяем на холостых ЗМЗ-409: 2.7 л, 874
+     * об/мин, 36 кПа, воздух 55 градусов.
+     */
+    @Test
+    fun airFlowFromManifoldPressure() {
+        val maf = FuelEconomy.mafFromMap(
+            rpm = 874.0,
+            mapKpa = 36.0,
+            intakeTempC = 55.0,
+            displacementL = 2.693,
+        )
+        assertNotNull(maf)
+        // Около 6 г/с - столько и проходит через мотор на холостых.
+        assertEquals(6.0, maf!!, 0.5)
+
+        val litresPerHour = FuelEconomy.litresPerHourFromMaf(maf)
+        // Холостой ход 2.7-литрового бензинового - около двух литров в час.
+        assertTrue("холостой расход $litresPerHour л/ч", litresPerHour in 1.2..3.0)
+    }
+
+    /** С газом растёт и давление, и расход - иначе оценка бесполезна. */
+    @Test
+    fun airFlowGrowsWithLoad() {
+        val idle = FuelEconomy.mafFromMap(850.0, 36.0, 55.0, 2.693)!!
+        val pull = FuelEconomy.mafFromMap(3000.0, 95.0, 45.0, 2.693)!!
+        assertTrue("под нагрузкой больше: $idle -> $pull", pull > idle * 5)
+    }
+
+    /** Без оборотов или без давления считать нечего - лучше null, чем ноль. */
+    @Test
+    fun airFlowNeedsRealNumbers() {
+        assertNull(FuelEconomy.mafFromMap(0.0, 36.0, 55.0, 2.693))
+        assertNull(FuelEconomy.mafFromMap(850.0, 0.0, 55.0, 2.693))
+        assertNull(FuelEconomy.mafFromMap(850.0, 36.0, 55.0, 0.0))
+    }
+
 }

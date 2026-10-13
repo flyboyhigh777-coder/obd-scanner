@@ -200,17 +200,31 @@ class ObdSession(
         val out = LinkedHashMap<Int, Double>()
         val missing = ArrayList<ObdPid>()
 
+        // Параметры, которые машина молча игнорирует, перестаём спрашивать.
+        // Это не мелочь: если человек включил в приборы всё подряд, два
+        // десятка неподдерживаемых номеров добавляют по обмену каждый и
+        // каждый цикл - то есть съедают ровно ту скорость, ради которой
+        // быстрые параметры отделены от медленных. Изредка пробуем снова:
+        // список поддержки у блока бывает неполным, и тишина может быть
+        // разовой.
+        if (++cyclesSinceSilentRetry >= SILENT_RETRY_CYCLES) {
+            cyclesSinceSilentRetry = 0
+            silentPids.clear()
+        }
+        val asked = pids.filter { (silentPids[it.id] ?: 0) < SILENT_BEFORE_DROP }
+        if (asked.isEmpty()) return out
+
         // Пакет пробуем, пока он работает, и изредка - даже после отказа.
         // Один раз выключить его навсегда нельзя: блок может промолчать на
         // первом цикле, пока просыпается, или в момент пуска двигателя, а
         // расплачиваться за это секундой на кадр до конца поездки незачем.
         val retrying = !multiPidWorks && ++cyclesSinceBatchOff >= BATCH_RETRY_CYCLES
-        val tryBatch = pids.size > 1 && (multiPidWorks || retrying)
+        val tryBatch = asked.size > 1 && (multiPidWorks || retrying)
         var batchAnswered = false
 
         if (tryBatch) {
             if (retrying) cyclesSinceBatchOff = 0
-            val chunks = pids.chunked(Elm.MAX_PIDS_PER_REQUEST)
+            val chunks = asked.chunked(Elm.MAX_PIDS_PER_REQUEST)
             // На пробном цикле хватает одной пачки: ответил блок - со
             // следующего цикла пакет снова работает целиком; не ответил -
             // потеряно одно обращение, а не весь цикл.
@@ -225,10 +239,19 @@ class ObdSession(
             }
             if (retrying) missing.addAll(chunks.drop(1).flatten())
         } else {
-            missing.addAll(pids)
+            missing.addAll(asked)
         }
 
         for (pid in missing) read(pid)?.let { out[pid.id] = it }
+
+        // Считаем молчание только когда связь жива: если не ответил никто,
+        // виновата шина, а не конкретный параметр.
+        if (out.isNotEmpty()) {
+            for (pid in asked) {
+                if (pid.id in out) silentPids.remove(pid.id)
+                else silentPids[pid.id] = (silentPids[pid.id] ?: 0) + 1
+            }
+        }
 
         if (tryBatch) {
             if (batchAnswered) {
@@ -544,6 +567,18 @@ class ObdSession(
     /** Сколько циклов прошло с отказа от пакета - через BATCH_RETRY_CYCLES пробуем снова. */
     private var cyclesSinceBatchOff = 0
 
+    /** Сколько раз подряд параметр промолчал там, где остальные ответили. */
+    private val silentPids = HashMap<Int, Int>()
+
+    private var cyclesSinceSilentRetry = 0
+
+    /**
+     * Параметры, которые машина не отдаёт и которые поэтому больше не
+     * спрашиваются. Экран показывает по ним не голый прочерк, а причину.
+     */
+    val unansweredPids: Set<Int>
+        get() = silentPids.filterValues { it >= SILENT_BEFORE_DROP }.keys
+
     override fun close() = adapter.close()
 
     private companion object {
@@ -575,6 +610,15 @@ class ObdSession(
 
         /** Через столько циклов после отказа пакет пробуется снова. */
         const val BATCH_RETRY_CYCLES = 120
+
+        /**
+         * Столько раз подряд параметр должен промолчать, чтобы его перестали
+         * спрашивать. Один-два пропуска бывают и у поддерживаемого номера.
+         */
+        const val SILENT_BEFORE_DROP = 3
+
+        /** Через столько циклов молчуны пробуются заново. */
+        const val SILENT_RETRY_CYCLES = 200
 
         /**
          * Таймаут одного запроса при переборе. Большинство номеров не

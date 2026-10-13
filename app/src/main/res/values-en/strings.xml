@@ -59,6 +59,9 @@
     <string name="dash_choose_hint">The list holds only what this car reports. The remaining standard parameters are not supported by it.</string>
     <string name="dash_consumption_moving">Consumption while moving</string>
     <string name="dash_consumption_idle">Consumption at idle</string>
+    <string name="dash_consumption_estimated_mark"> (calculated)</string>
+    <string name="dash_consumption_estimated_hint">This engine has neither an air-flow meter nor a ready fuel-rate PID, so the app works it out from manifold pressure, rpm and temperature. It is an estimate: compare it against a fill-up and adjust Volumetric efficiency on the Vehicle tab.</string>
+    <string name="dash_no_answer">no answer</string>
     <string name="dash_consumption_average">Trip average</string>
     <string name="dash_fuel_used">Fuel used</string>
     <string name="dash_trip_distance">Distance</string>
@@ -211,6 +214,8 @@
     <string name="vehicle_mass">Curb mass, kg</string>
     <string name="vehicle_payload">People and cargo, kg</string>
     <string name="vehicle_redline">Redline, rpm</string>
+    <string name="vehicle_volumetric" formatted="false">Volumetric efficiency, %</string>
+    <string name="vehicle_volumetric_hint">Only used to work out consumption on engines without an air-flow meter. 80 is mid-range for a naturally aspirated engine. If a fill-up shows the app read low, raise it; if it read high, lower it.</string>
     <string name="vehicle_tyre">Tyres</string>
     <string name="vehicle_tyre_bad">Does not look like a tyre size - expected 245/70R16</string>
     <string name="vehicle_profile_reset">Restore profile defaults</string>

@@ -167,10 +167,18 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                 Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
                     row.forEach { pid ->
                         val value = live.values[pid.id]
+                        // Голый прочерк не отличает "ещё не пришло" от "машина
+                        // такого не умеет", а разница существенная: во втором
+                        // случае плитку надо просто убрать.
+                        val text = when {
+                            value != null -> Format.value(pid, value, units)
+                            pid.id in live.unanswered -> stringResource(R.string.dash_no_answer)
+                            else -> dash
+                        }
                         if (style == "BAR") {
                             BarGauge(
                                 title = pid.title,
-                                valueText = value?.let { Format.value(pid, it, units) } ?: dash,
+                                valueText = text,
                                 fraction = value?.let { fractionFor(pid, it, units, profile) },
                                 accent = alertColor(alertFor(pid, value)),
                                 modifier = Modifier.weight(1f)
@@ -178,7 +186,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                         } else {
                             ValueTile(
                                 title = pid.title,
-                                valueText = value?.let { Format.value(pid, it, units) } ?: dash,
+                                valueText = text,
                                 modifier = Modifier.weight(1f),
                                 alert = alertFor(pid, value)
                             )
@@ -334,7 +342,11 @@ private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSy
                 Text(
                     stringResource(
                         if (moving) R.string.dash_consumption_moving else R.string.dash_consumption_idle
-                    ),
+                    ) + if (live.consumptionEstimated) {
+                        stringResource(R.string.dash_consumption_estimated_mark)
+                    } else {
+                        ""
+                    },
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = scale.label,
                         lineHeight = scale.label * 1.3f
@@ -388,6 +400,9 @@ private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSy
             )
         } else {
             Hint(stringResource(R.string.dash_consumption_record_hint))
+        }
+        if (live.consumptionEstimated) {
+            Hint(stringResource(R.string.dash_consumption_estimated_hint))
         }
     }
 }
