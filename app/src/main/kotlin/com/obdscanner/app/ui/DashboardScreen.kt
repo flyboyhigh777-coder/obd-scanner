@@ -341,15 +341,12 @@ private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSy
                     ),
                     color = TextMuted
                 )
-                Text(
+                AutoFitValue(
                     consumptionText(live.litresPer100Km, live.litresPerHour, units)
                         ?: stringResource(R.string.common_dash),
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontSize = scale.gaugeValue,
-                        lineHeight = scale.gaugeValue * 1.15f
-                    ),
-                    color = TextBright,
-                    maxLines = 1
+                    MaterialTheme.typography.displaySmall,
+                    scale.gaugeValue,
+                    TextBright
                 )
             }
             live.values[Pids.FUEL_LEVEL.id]?.let { level ->
@@ -363,14 +360,11 @@ private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSy
                         color = TextMuted,
                         maxLines = 1
                     )
-                    Text(
+                    AutoFitValue(
                         Format.value(Pids.FUEL_LEVEL, level, units),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = scale.value,
-                            lineHeight = scale.value * 1.15f
-                        ),
-                        color = TextBright,
-                        maxLines = 1
+                        MaterialTheme.typography.titleLarge,
+                        scale.value,
+                        TextBright
                     )
                 }
             }

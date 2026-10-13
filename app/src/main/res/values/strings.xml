@@ -173,6 +173,12 @@
     <string name="connect_auto_reconnect">Переподключаться автоматически</string>
     <string name="connect_auto_reconnect_hint">Если связь оборвалась (выключили зажигание, вышли из машины), приложение само попробует соединиться заново - до трёх раз.</string>
     <string name="connect_reconnecting">Переподключение, попытка %1$d…</string>
+    <string name="connect_text_size">Размер текста</string>
+    <string name="connect_text_size_hint">Крупнее — значит больше прокрутки пальцем, зато читается с водительского места, не наклоняясь к экрану. Цифры приборов сами ужимаются, чтобы влезть в плитку, и не обрезаются.</string>
+    <string name="connect_text_normal">Обычный</string>
+    <string name="connect_text_large">Крупный</string>
+    <string name="connect_text_larger">Ещё крупнее</string>
+    <string name="connect_text_largest">Максимум</string>
     <string name="connect_gauge_style">Вид приборов</string>
     <string name="gauge_style_dial">Шкалы</string>
     <string name="gauge_style_bar">Полоски</string>
@@ -318,6 +324,7 @@
     <string name="connect_rate_value">%1$.1f раз/с (%2$d мс)</string>
     <string name="connect_rate_detail">Из них обмен с адаптером — %1$d мс, остальное пауза из настройки выше. Без паузы будет около %2$.1f раз/с.</string>
     <string name="connect_rate_detail_max">Пауза выключена — всё это время уходит на обмен с адаптером, быстрее он не отвечает.</string>
+    <string name="connect_slow_group">Это частота оборотов, скорости и дросселя. Температура, уровень топлива и напряжение спрашиваются полным кругом раз в %1$d мс — за это время они всё равно не меняются, зато стрелка успевает за педалью.</string>
     <string name="connect_batched">Приборы спрашиваются пакетом — все за один обмен с адаптером. Это самый быстрый режим.</string>
     <string name="connect_not_batched">Пакетный запрос не поддержан этим адаптером или блоком — приборы спрашиваются по одному, и цикл во столько же раз длиннее.</string>
 </resources>

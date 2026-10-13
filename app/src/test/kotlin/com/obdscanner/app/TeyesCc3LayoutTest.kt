@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Assert.assertTrue
@@ -94,7 +95,10 @@ class TeyesCc3LayoutTest {
 
         // Поиск блоков вне OBD-II: на магнитоле этот раздел самый длинный, и
         // на низком экране он первым бы и поехал.
-        compose.onNodeWithText("Найти блоки").performClick()
+        // На экране магнитолы (600 dp в высоту) кнопка уезжает под нижний
+        // край, и клик без прокрутки уходит мимо - ровно то, что сделает
+        // человек пальцем.
+        compose.onNodeWithText("Найти блоки").performScrollTo().performClick()
         pumpUntil(60_000, "перебор адресов блоков") { vm.modules.value.loaded }
         assertTrue(
             "виртуальные блоки найдены: ${vm.modules.value.found.map { it.hex }}",

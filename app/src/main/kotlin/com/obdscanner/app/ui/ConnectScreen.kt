@@ -74,6 +74,7 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     val connection by viewModel.connection.collectAsState()
     val units by viewModel.units.collectAsState()
     val pollInterval by viewModel.pollInterval.collectAsState()
+    val textScale by viewModel.textScale.collectAsState()
     val terminal by viewModel.terminal.collectAsState()
     val paired by viewModel.pairedDevices.collectAsState()
     val discovered by viewModel.discovered.collectAsState()
@@ -322,6 +323,21 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             }
             Hint(stringResource(R.string.connect_protocol_hint))
 
+            // Размер текста. На магнитоле её экран смотрят с вытянутой руки, а
+            // не держат перед носом, и системную настройку шрифта там менять
+            // нечем - поэтому своя.
+            Text(stringResource(R.string.connect_text_size), color = TextBright)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TEXT_SIZES.forEach { (label, value) ->
+                    SegmentButton(
+                        stringResource(label),
+                        kotlin.math.abs(textScale - value) < 0.01f,
+                        Modifier.weight(1f)
+                    ) { viewModel.setTextScale(value) }
+                }
+            }
+            Hint(stringResource(R.string.connect_text_size_hint))
+
             Text(stringResource(R.string.connect_gauge_style), color = TextBright)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SegmentButton(stringResource(R.string.gauge_style_dial), gaugeStyle == "DIAL", Modifier.weight(1f)) {
@@ -366,6 +382,9 @@ fun ConnectScreen(viewModel: ObdViewModel) {
                         stringResource(R.string.connect_rate_detail_max)
                     }
                 )
+                if (live.slowMillis > 0) {
+                    Hint(stringResource(R.string.connect_slow_group, live.slowMillis))
+                }
                 Hint(
                     stringResource(
                         if (live.batched) R.string.connect_batched else R.string.connect_not_batched
@@ -500,6 +519,18 @@ private fun DeviceRow(device: DiscoveredDevice, selected: Boolean, onSelect: (Di
         modifier = Modifier.fillMaxWidth()
     ) { onSelect(device) }
 }
+
+/**
+ * Ступени размера текста. Множитель к системному: единица - как система и
+ * просит, дальше крупнее. Больше 1.75 не даём - цифры начинают ужиматься
+ * подгонкой, и толку от увеличения уже нет.
+ */
+private val TEXT_SIZES = listOf(
+    R.string.connect_text_normal to 1.0f,
+    R.string.connect_text_large to 1.25f,
+    R.string.connect_text_larger to 1.5f,
+    R.string.connect_text_largest to 1.75f,
+)
 
 @Composable
 private fun TerminalPanel(lines: List<String>, onSend: (String) -> Unit) {

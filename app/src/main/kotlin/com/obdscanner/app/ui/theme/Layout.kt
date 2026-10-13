@@ -86,6 +86,8 @@ data class UiScale(
     val gaugeValue: TextUnit,
     /** Подпись над значением. */
     val label: TextUnit,
+    /** Пояснения и расшифровки - то, что приходят прочитать, а не окинуть взглядом. */
+    val hint: TextUnit,
     val panelPadding: Dp,
     val panelGap: Dp,
     val screenPadding: Dp,
@@ -98,6 +100,7 @@ private val PHONE_SCALE = UiScale(
     value = 22.sp,
     gaugeValue = 28.sp,
     label = 12.sp,
+    hint = 13.sp,
     panelPadding = 14.dp,
     panelGap = 8.dp,
     screenPadding = 14.dp,
@@ -108,7 +111,8 @@ private val PHONE_SCALE = UiScale(
 private val CAR_SCALE = UiScale(
     value = 32.sp,
     gaugeValue = 48.sp,
-    label = 13.sp,
+    label = 15.sp,
+    hint = 16.sp,
     panelPadding = 10.dp,
     panelGap = 4.dp,
     screenPadding = 10.dp,

@@ -23,6 +23,19 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_POLL, DEFAULT_POLL).coerceIn(MIN_POLL, MAX_POLL)
         set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(MIN_POLL, MAX_POLL)).apply()
 
+    /**
+     * Множитель размера текста во всём приложении.
+     *
+     * Системную настройку шрифта он не заменяет, а умножает: на магнитоле
+     * системную менять неудобно (а на иных прошивках и нечем), и сидят перед
+     * ней не вплотную, как с телефоном в руках, а на вытянутую руку.
+     */
+    var textScale: Float
+        get() = prefs.getFloat(KEY_TEXT_SCALE, 1f).coerceIn(MIN_TEXT_SCALE, MAX_TEXT_SCALE)
+        set(value) = prefs.edit()
+            .putFloat(KEY_TEXT_SCALE, value.coerceIn(MIN_TEXT_SCALE, MAX_TEXT_SCALE))
+            .apply()
+
     var units: UnitSystem
         get() = if (prefs.getBoolean(KEY_IMPERIAL, false)) UnitSystem.IMPERIAL else UnitSystem.METRIC
         set(value) = prefs.edit().putBoolean(KEY_IMPERIAL, value == UnitSystem.IMPERIAL).apply()
@@ -182,6 +195,7 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putString(KEY_DASH, value.joinToString(",")).apply()
 
     private companion object {
+        const val KEY_TEXT_SCALE = "text_scale"
         const val KEY_POLL = "poll_interval"
         const val KEY_IMPERIAL = "imperial"
         const val KEY_WIFI_HOST = "wifi_host"
@@ -210,6 +224,12 @@ class AppSettings(context: Context) {
          * один обмен с адаптером стоит 25-60 мс, и с пакетным запросом именно
          * он задаёт скорость, а не пауза между циклами.
          */
+        /** Меньше единицы не даём: мельче системного уже нечитаемо. */
+        const val MIN_TEXT_SCALE = 1.0f
+
+        /** Больше вдвое не даём: цифры перестают влезать даже с подгонкой. */
+        const val MAX_TEXT_SCALE = 2.0f
+
         const val MIN_POLL = 0
         const val MAX_POLL = 2000
         const val DEFAULT_HOST = "192.168.0.10"

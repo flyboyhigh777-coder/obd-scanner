@@ -166,6 +166,12 @@
     <string name="connect_auto_reconnect">Reconnect automatically</string>
     <string name="connect_auto_reconnect_hint">If the link drops (ignition off, you walked away), the app retries on its own - up to three times.</string>
     <string name="connect_reconnecting">Reconnecting, attempt %1$d…</string>
+    <string name="connect_text_size">Text size</string>
+    <string name="connect_text_size_hint">Larger means more scrolling, but it reads from the driver seat without leaning in. Gauge numbers shrink to fit their tile instead of being cut off.</string>
+    <string name="connect_text_normal">Normal</string>
+    <string name="connect_text_large">Large</string>
+    <string name="connect_text_larger">Larger</string>
+    <string name="connect_text_largest">Maximum</string>
     <string name="connect_gauge_style">Gauge style</string>
     <string name="gauge_style_dial">Dials</string>
     <string name="gauge_style_bar">Bars</string>
@@ -305,6 +311,7 @@
     <string name="connect_rate_value">%1$.1f per second (%2$d ms)</string>
     <string name="connect_rate_detail">Of that, %1$d ms is the exchange with the adapter and the rest is the pause set above. With no pause it would be about %2$.1f per second.</string>
     <string name="connect_rate_detail_max">The pause is off - all of this time is the exchange with the adapter, and it will not answer any faster.</string>
+    <string name="connect_slow_group">That is the rate for rpm, speed and throttle. Temperature, fuel level and voltage are read on a full round every %1$d ms - they do not change in that time anyway, and the needle keeps up with the pedal.</string>
     <string name="connect_batched">Parameters are requested in one batch — all in a single exchange with the adapter. This is the fastest mode.</string>
     <string name="connect_not_batched">This adapter or ECU does not support batched requests, so parameters are read one by one and the cycle is that many times longer.</string>
 </resources>

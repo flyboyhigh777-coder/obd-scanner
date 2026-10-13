@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -18,8 +22,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeCyan
@@ -107,14 +113,11 @@ fun ArcGauge(
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                AutoFitValue(
                     valueText,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = scale.gaugeValue,
-                        lineHeight = scale.gaugeValue * 1.15f,
-                    ),
-                    color = TextBright,
-                    maxLines = 1
+                    MaterialTheme.typography.headlineMedium,
+                    scale.gaugeValue,
+                    TextBright
                 )
                 if (unitText.isNotEmpty()) {
                     Text(
@@ -171,21 +174,63 @@ fun ValueTile(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
+        AutoFitValue(
             valueText,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontSize = scale.value,
-                lineHeight = scale.value * 1.15f,
-            ),
-            color = when (alert) {
+            MaterialTheme.typography.titleLarge,
+            scale.value,
+            when (alert) {
                 Alert.NONE -> TextBright
                 Alert.WARNING -> GaugeAmber
                 Alert.DANGER -> GaugeRed
-            },
-            maxLines = 1
+            }
         )
     }
 }
+
+/**
+ * Значение, которое подгоняется под ширину плитки.
+ *
+ * Нужно из-за настройки размера текста: при крупном шрифте "1234 об/мин" в
+ * половину ширины телефона уже не влезает, а обрезать цифру многоточием -
+ * худшее, что может сделать прибор. Поэтому если строка не помещается, шрифт
+ * уменьшается шагами, пока не влезет, но не ниже половины заданного.
+ *
+ * Подгонка привязана к длине строки, а не к самой строке: обороты меняются по
+ * несколько раз в секунду, и пересчитывать размер на каждое новое число
+ * значило бы дёргать текст без всякой нужды.
+ */
+@Composable
+fun AutoFitValue(
+    text: String,
+    style: TextStyle,
+    baseSize: TextUnit,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    var size by remember(text.length, baseSize) { mutableStateOf(baseSize) }
+    var measured by remember(text.length, baseSize) { mutableStateOf(false) }
+    Text(
+        text,
+        modifier = modifier,
+        style = style.copy(fontSize = size, lineHeight = size * 1.15f),
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        onTextLayout = { layout ->
+            if (!measured && layout.didOverflowWidth && size > baseSize * MIN_FIT) {
+                size *= FIT_STEP
+            } else {
+                measured = true
+            }
+        }
+    )
+}
+
+/** Ниже этой доли от заданного размера не ужимаем - дальше нечитаемо. */
+private const val MIN_FIT = 0.55f
+
+/** Шаг подгонки: мельче шаг - больше проходов разметки на каждую плитку. */
+private const val FIT_STEP = 0.9f
 
 enum class Alert { NONE, WARNING, DANGER }
 
@@ -215,15 +260,7 @@ fun BarGauge(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            valueText,
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontSize = scale.value,
-                lineHeight = scale.value * 1.15f,
-            ),
-            color = TextBright,
-            maxLines = 1
-        )
+        AutoFitValue(valueText, MaterialTheme.typography.titleLarge, scale.value, TextBright)
         Canvas(
             Modifier
                 .fillMaxWidth()

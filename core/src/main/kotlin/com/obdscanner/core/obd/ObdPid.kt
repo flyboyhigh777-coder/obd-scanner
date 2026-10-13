@@ -251,6 +251,32 @@ object Pids {
         INTAKE_TEMP.id, CONTROL_MODULE_VOLTAGE.id, FUEL_LEVEL.id
     )
 
+    /**
+     * Параметры, которые меняются быстрее, чем человек успевает моргнуть.
+     *
+     * Это главное, что решает задержку между педалью и стрелкой на экране.
+     * Один обмен с адаптером стоит 25-60 мс, а в одну команду влезает шесть
+     * номеров - значит каждые лишние шесть параметров в опросе добавляют
+     * десятки миллисекунд ко всему кругу. Температура охлаждающей жидкости
+     * ползёт минутами, уровень топлива - десятками минут, и спрашивать их
+     * наравне с оборотами значит растягивать круг втрое ради цифр, которые за
+     * это время не изменятся.
+     *
+     * Здесь - то, что меняется от нажатия на педаль: обороты, скорость,
+     * дроссель, нагрузка, расход воздуха и топлива, угол опережения, давление
+     * во впуске, лямбда-зонды и быстрая коррекция топлива. Всё остальное
+     * читается реже, и на экране от этого ничего не теряется.
+     */
+    val FAST: Set<Int> = setOf(
+        RPM.id, SPEED.id, THROTTLE.id, RELATIVE_THROTTLE.id, COMMANDED_THROTTLE.id,
+        ACCEL_PEDAL_D.id, RELATIVE_ACCEL_PEDAL.id,
+        ENGINE_LOAD.id, ABSOLUTE_LOAD.id, MAF.id, INTAKE_MAP.id, FUEL_RATE.id,
+        TIMING_ADVANCE.id, INJECTION_TIMING.id,
+        O2_B1S1_VOLTAGE.id, O2_B1S2_VOLTAGE.id, EQUIVALENCE_RATIO.id,
+        SHORT_FUEL_TRIM_1.id, SHORT_FUEL_TRIM_2.id,
+        DEMANDED_TORQUE.id, ACTUAL_TORQUE.id, FUEL_SYSTEM_STATUS.id,
+    )
+
     /** PID, которые не меняются на ходу - их достаточно прочитать один раз. */
     val STATIC: Set<Int> = setOf(
         OBD_STANDARD.id, FUEL_TYPE.id, REFERENCE_TORQUE.id, DISTANCE_SINCE_CLEAR.id,

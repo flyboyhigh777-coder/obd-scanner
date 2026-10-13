@@ -107,6 +107,12 @@ data class LiveSnapshot(
      * настройку или уже в адаптер.
      */
     val workMillis: Long = 0,
+    /**
+     * Полный круг, в котором спрашивается вообще всё, включая температуру,
+     * уровень топлива и напряжение, мс. Он длиннее быстрого, и выдавать
+     * быструю частоту за общую нельзя.
+     */
+    val slowMillis: Long = 0,
     /** Удалось ли спрашивать параметры пакетом - от этого зависит скорость. */
     val batched: Boolean = false,
 ) {
@@ -298,6 +304,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _pollInterval = MutableStateFlow(settings.pollIntervalMillis)
     val pollInterval: StateFlow<Int> = _pollInterval.asStateFlow()
+
+    private val _textScale = MutableStateFlow(settings.textScale)
+    val textScale: StateFlow<Float> = _textScale.asStateFlow()
 
     private val _profile = MutableStateFlow(settings.vehicleProfile())
     val profile: StateFlow<VehicleProfile> = _profile.asStateFlow()
@@ -523,6 +532,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         _pollInterval.value = settings.pollIntervalMillis
     }
 
+    /** Размер текста во всём приложении - множитель к системному. */
+    fun setTextScale(scale: Float) {
+        settings.textScale = scale
+        _textScale.value = settings.textScale
+    }
+
     fun setUnits(system: UnitSystem) {
         settings.units = system
         _units.value = system
@@ -733,6 +748,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun pollLoop(session: ObdSession) {
         var cycle = 0
         var emptyCycles = 0
+        // Последние известные значения. Медленные параметры читаются не каждый
+        // круг, и без этой памяти их плитки мигали бы прочерком.
+        val latest = LinkedHashMap<Int, Double>()
+        var fastMillis = 0L
+        var fastWork = 0L
+        var slowMillis = 0L
         while (currentCoroutineContext().isActive) {
             val task = tasks.tryReceive().getOrNull()
             if (task != null) {
@@ -740,9 +761,19 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 continue
             }
             val startedAt = System.currentTimeMillis()
-            val pids = pollList(session)
-            val values = if (pids.isEmpty()) emptyMap() else session.readAll(pids)
-            if (values.isEmpty() && pids.isNotEmpty()) {
+            val all = pollList(session)
+            // Главная причина, по которой стрелка отстаёт от педали: в круг
+            // набивается полтора десятка параметров, а в одну команду влезает
+            // шесть - то есть три обмена с адаптером вместо одного. Обороты и
+            // дроссель спрашиваем каждый круг, а температуру и уровень
+            // топлива - раз в SLOW_EVERY кругов: за 300 мс они не меняются.
+            val fast = all.filter { it.id in Pids.FAST }
+            val slowTurn = cycle % SLOW_EVERY == 0 || fast.isEmpty()
+            val pids = if (slowTurn) all else fast
+            val fresh = if (pids.isEmpty()) emptyMap() else session.readAll(pids)
+            latest.putAll(fresh)
+            val values: Map<Int, Double> = LinkedHashMap(latest)
+            if (fresh.isEmpty() && pids.isNotEmpty()) {
                 // Несколько пустых циклов подряд - адаптер выдернули или машину
                 // заглушили: честнее показать обрыв связи, чем замершие цифры.
                 if (++emptyCycles >= LOST_CONNECTION_CYCLES) {
@@ -754,11 +785,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 emptyCycles = 0
             }
-            // Напряжение - отдельная команда поверх приборов, и теперь, когда
-            // сами приборы приходят одним пакетом, она заметна. Меняется оно
-            // медленно, поэтому спрашиваем реже: иначе цикл удваивается ради
-            // числа, которое дрожит в третьем знаке.
-            if (cycle % VOLTAGE_EVERY == 0) readBatteryVoltage(session, values[Pids.RPM.id])
+            // Напряжение - отдельная команда поверх приборов, и на быстром
+            // круге ей делать нечего: оно меняется медленнее температуры.
+            if (slowTurn) readBatteryVoltage(session, values[Pids.RPM.id])
             val custom = readCustomPids(session)
             // Статус лампы Check Engine меняется редко - спрашиваем его не каждый
             // цикл, чтобы не отнимать время у приборов.
@@ -769,7 +798,23 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             // разъехались, если настройку подвинут прямо сейчас.
             val pause = _pollInterval.value.toLong()
             val work = System.currentTimeMillis() - startedAt
-            publish(values, custom, monitor, work + pause, work, session.multiPidSupported)
+            // Быстрый и полный круги меряем порознь: показать их одним числом
+            // значит показать то одно, то другое через раз.
+            if (slowTurn) {
+                slowMillis = work + pause
+            } else {
+                fastMillis = work + pause
+                fastWork = work
+            }
+            publish(
+                values = values,
+                custom = custom,
+                monitor = monitor,
+                cycleMillis = if (fastMillis > 0) fastMillis else work + pause,
+                workMillis = if (fastMillis > 0) fastWork else work,
+                slowMillis = slowMillis,
+                batched = session.multiPidSupported,
+            )
             cycle++
             delay(pause)
         }
@@ -1003,6 +1048,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         monitor: MonitorStatus?,
         cycleMillis: Long = 0,
         workMillis: Long = 0,
+        slowMillis: Long = 0,
         batched: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
@@ -1057,6 +1103,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             updatedAtMillis = now,
             cycleMillis = cycleMillis,
             workMillis = workMillis,
+            slowMillis = slowMillis,
             batched = batched,
         )
         if (recording && values.isNotEmpty()) {
@@ -1217,7 +1264,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
          * команда, а меняется оно медленно - каждый цикл на него тратиться
          * незачем.
          */
-        const val VOLTAGE_EVERY = 5
+        /**
+         * Раз во столько кругов спрашивается всё подряд. Четыре быстрых круга
+         * на один полный: обороты обновляются вчетверо чаще, а температура -
+         * раз в треть секунды, чего ей с запасом хватает.
+         */
+        const val SLOW_EVERY = 5
 
         const val TERMINAL_LINES = 40
 

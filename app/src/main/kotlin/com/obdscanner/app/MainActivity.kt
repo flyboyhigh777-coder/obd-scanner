@@ -33,8 +33,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.ConnectScreen
 import com.obdscanner.app.ui.DashboardScreen
@@ -79,7 +81,17 @@ class MainActivity : ComponentActivity() {
                     // Голый Box не прокидывает цвет текста по умолчанию (это делает
                     // Surface), и без этого текст без явного color рисуется чёрным
                     // и исчезает на тёмном фоне.
-                    CompositionLocalProvider(LocalContentColor provides TextBright) {
+                    // Размер текста задаётся через плотность: так увеличивается
+                    // весь текст приложения сразу, включая диалоги и описания
+                    // ошибок, а не только там, где про это не забыли. Сам
+                    // размер в sp не трогаем - меняется множитель, на который
+                    // система их переводит в пиксели.
+                    val textScale by viewModel.textScale.collectAsState()
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(
+                        LocalContentColor provides TextBright,
+                        LocalDensity provides Density(density.density, density.fontScale * textScale),
+                    ) {
                         val wide = isWideScreen()
                         val content = @Composable { modifier: Modifier ->
                             Box(modifier) {

@@ -70,7 +70,16 @@ fun PanelTitle(text: String) {
 /** Пояснение мелким серым - то, что объясняет, зачем раздел нужен. */
 @Composable
 fun Hint(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = TextMuted, modifier = modifier)
+    // На широком экране магнитолы bodySmall (12 sp) читается с трудом: её
+    // смотрят с вытянутой руки, а не держат перед лицом. Там же, где текста
+    // много - расшифровки ошибок, подсказки, - это и есть то, что человек
+    // приходит прочитать.
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = uiScale().hint),
+        color = TextMuted,
+        modifier = modifier
+    )
 }
 
 /** Строка "название - значение". */
