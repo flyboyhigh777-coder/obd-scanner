@@ -25,6 +25,8 @@ import com.obdscanner.core.dtc.DtcCatalog
 import com.obdscanner.core.dtc.DtcSource
 import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdProtocol
+import com.obdscanner.core.modules.FoundModule
+import com.obdscanner.core.modules.ModuleScan
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.FuelEconomy
 import com.obdscanner.core.obd.FuelType
@@ -145,6 +147,21 @@ data class BatteryState(
  * ним и повторным чтением. Это и есть способ найти параметр, которого нет ни в
  * одной документации: снять снимок, включить фары или обогрев стекла, сравнить.
  */
+/**
+ * Поиск блоков вне OBD-II: ABS, подушки, АКПП.
+ *
+ * [possible] = false означает, что на этом протоколе перебор мы не умеем, и
+ * кнопку показывать незачем.
+ */
+data class ModuleScanState(
+    val running: Boolean = false,
+    val done: Int = 0,
+    val total: Int = 0,
+    val found: List<FoundModule> = emptyList(),
+    val loaded: Boolean = false,
+    val possible: Boolean = true,
+)
+
 data class PidScanState(
     val running: Boolean = false,
     val done: Int = 0,
@@ -161,6 +178,8 @@ data class DtcState(
     val stored: List<Dtc> = emptyList(),
     val pending: List<Dtc> = emptyList(),
     val permanent: List<Dtc> = emptyList(),
+    /** Блок не ответил на запрос кодов - это не то же самое, что "кодов нет". */
+    val failed: Boolean = false,
     val monitor: MonitorStatus? = null,
     val freezeFrame: Map<Int, Double> = emptyMap(),
     val message: String? = null
@@ -206,6 +225,7 @@ private sealed interface ObdTask {
     data object RefreshVehicle : ObdTask
     data object CrankTest : ObdTask
     data class ScanPids(val from: Int, val to: Int) : ObdTask
+    data object ScanModules : ObdTask
     data object SnapshotPids : ObdTask
     data object ComparePids : ObdTask
     data class Terminal(val command: String) : ObdTask
@@ -242,6 +262,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _pidScan = MutableStateFlow(PidScanState())
     val pidScan: StateFlow<PidScanState> = _pidScan.asStateFlow()
+
+    private val _modules = MutableStateFlow(ModuleScanState())
+    val modules: StateFlow<ModuleScanState> = _modules.asStateFlow()
 
     /**
      * Меняется при каждой правке своих расшифровок. Нужен только для того,
@@ -334,6 +357,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     @Volatile
     private var pidScanStop = false
+    private var moduleScanStop = false
 
     /** Снимок значений для сравнения "до и после". */
     private var pidSnapshot: List<ScanHit> = emptyList()
@@ -882,6 +906,40 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         pidScanStop = true
     }
 
+    /**
+     * Поиск блоков, которых нет в OBD-II.
+     *
+     * Нужен ровно для одного: лампа ABS на панели горит, а на вкладке
+     * "Ошибки" пусто - потому что режим 03 спрашивает только двигатель.
+     */
+    fun scanModules() {
+        if (_modules.value.running) return
+        tasks.trySend(ObdTask.ScanModules)
+    }
+
+    fun stopModuleScan() {
+        moduleScanStop = true
+    }
+
+    private fun runModuleScan(session: ObdSession) {
+        if (!session.canScanModules) {
+            _modules.value = ModuleScanState(loaded = true, possible = false)
+            return
+        }
+        moduleScanStop = false
+        _modules.value = ModuleScanState(
+            running = true,
+            total = ModuleScan.LAST_ADDRESS - ModuleScan.FIRST_ADDRESS + 1,
+        )
+        val found = session.scanModules(
+            shouldStop = { moduleScanStop },
+            onProgress = { done, total, _ ->
+                _modules.value = _modules.value.copy(done = done, total = total)
+            },
+        )
+        _modules.value = ModuleScanState(running = false, loaded = true, found = found)
+    }
+
     /** Запоминает текущие значения, чтобы потом сравнить с ними. */
     fun takePidSnapshot() {
         tasks.trySend(ObdTask.SnapshotPids)
@@ -1013,22 +1071,29 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      * воздуха), даже если их не показывают на экране.
      */
     private fun pollList(session: ObdSession): List<ObdPid> {
-        val ids = LinkedHashSet(_dashboardPids.value)
+        val chosen = _dashboardPids.value.toSet()
+        val ids = LinkedHashSet(chosen)
         ids.add(Pids.SPEED.id)
         ids.add(Pids.RPM.id)
         if (session.supports(Pids.FUEL_RATE.id)) ids.add(Pids.FUEL_RATE.id) else ids.add(Pids.MAF.id)
         if (session.supports(Pids.FUEL_LEVEL.id)) ids.add(Pids.FUEL_LEVEL.id)
-        return ids.mapNotNull { Pids.byId[it] }.filter { session.supports(it.id) && it.id !in Pids.STATIC }
+        // Выбранное руками спрашиваем, даже если машина про этот параметр не
+        // сообщала: блоки бывают скромные и отдают больше, чем заявляют. А вот
+        // то, что приложение добавило само, - только из заявленного.
+        return ids.mapNotNull { Pids.byId[it] }
+            .filter { it.id !in Pids.STATIC && (it.id in chosen || session.supports(it.id)) }
     }
 
     private suspend fun handle(task: ObdTask, session: ObdSession) {
         when (task) {
             ObdTask.ReadDtcs -> {
-                val stored = session.readDtcs(DtcSource.STORED)
-                val pending = session.readDtcs(DtcSource.PENDING)
-                val permanent = session.readDtcs(DtcSource.PERMANENT)
+                // null - блок не ответил. Выдавать это за чистую машину нельзя:
+                // человек поверит и поедет дальше с неисправностью.
+                val stored = session.readDtcsOrNull(DtcSource.STORED)
+                val pending = session.readDtcsOrNull(DtcSource.PENDING)
+                val permanent = session.readDtcsOrNull(DtcSource.PERMANENT)
                 val monitor = session.readMonitorStatus()
-                val freeze = if (stored.isNotEmpty()) {
+                val freeze = if (!stored.isNullOrEmpty()) {
                     session.readFreezeFrame(
                         FREEZE_FRAME_PIDS.mapNotNull { Pids.byId[it] }.filter { session.supports(it.id) }
                     )
@@ -1038,9 +1103,10 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 _dtc.value = DtcState(
                     reading = false,
                     loaded = true,
-                    stored = stored,
-                    pending = pending,
-                    permanent = permanent,
+                    stored = stored.orEmpty(),
+                    pending = pending.orEmpty(),
+                    permanent = permanent.orEmpty(),
+                    failed = stored == null,
                     monitor = monitor,
                     freezeFrame = freeze
                 )
@@ -1048,15 +1114,16 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
             ObdTask.ClearDtcs -> {
                 val ok = session.clearDtcs()
-                val stored = session.readDtcs(DtcSource.STORED)
-                val pending = session.readDtcs(DtcSource.PENDING)
-                val permanent = session.readDtcs(DtcSource.PERMANENT)
+                val stored = session.readDtcsOrNull(DtcSource.STORED)
+                val pending = session.readDtcsOrNull(DtcSource.PENDING)
+                val permanent = session.readDtcsOrNull(DtcSource.PERMANENT)
                 _dtc.value = DtcState(
                     reading = false,
                     loaded = true,
-                    stored = stored,
-                    pending = pending,
-                    permanent = permanent,
+                    stored = stored.orEmpty(),
+                    pending = pending.orEmpty(),
+                    permanent = permanent.orEmpty(),
+                    failed = stored == null,
                     monitor = session.readMonitorStatus(),
                     freezeFrame = emptyMap(),
                     message = getApplication<Application>().getString(
@@ -1070,6 +1137,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             ObdTask.CrankTest -> runCrankTest(session)
 
             is ObdTask.ScanPids -> runPidScan(session, task.from, task.to)
+
+            ObdTask.ScanModules -> runModuleScan(session)
 
             ObdTask.SnapshotPids -> {
                 pidSnapshot = _pidScan.value.hits
@@ -1112,12 +1181,18 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    /** Если сохранённый набор параметров машине не подходит - берём пересечение. */
+    /**
+     * Что показывать на приборах, если выбора ещё нет.
+     *
+     * Сам выбор не трогаем: раньше здесь отбрасывалось всё, чего машина не
+     * заявила, и включённый вручную параметр пропадал при следующем
+     * подключении. Заявленный список - не истина в последней инстанции, блок
+     * может отдавать больше; решает человек.
+     */
     private fun ensureDashboardSelection() {
+        if (_dashboardPids.value.isNotEmpty()) return
         val supported = _supportedPids.value.map { it.id }.toSet()
-        val filtered = _dashboardPids.value.filter { it in supported }
-        val result = filtered.ifEmpty { Pids.DEFAULT_DASHBOARD.filter { it in supported } }
-        _dashboardPids.value = result
+        _dashboardPids.value = Pids.DEFAULT_DASHBOARD.filter { it in supported }
     }
 
     private fun currentStats(): TripStats = synchronized(recorderLock) { recorder.stats(dieselFuel) }

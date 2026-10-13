@@ -54,11 +54,18 @@
     <string name="dash_waiting">Ждём первые данные…</string>
     <string name="dash_mil_on">Горит Check Engine</string>
     <string name="dash_mil_off">Check Engine не горит</string>
-    <string name="dash_dtc_count">Сохранённых ошибок: %1$d</string>
+    <string name="dash_dtc_count">Счётчик кодов в ЭБУ: %1$d</string>
     <string name="dash_choose">Выбрать параметры</string>
     <string name="dash_choose_title">Что показывать на приборах</string>
+    <string name="dash_choose_show_all">Показать все %1$d параметров (машина заявила %2$d)</string>
+    <string name="dash_choose_unlisted">машина про него не сообщала — может не ответить</string>
     <string name="dash_choose_hint">В списке только то, что отдаёт эта машина. Остальные параметры стандарта она не поддерживает.</string>
-    <string name="dash_consumption">Расход</string>
+    <string name="dash_consumption_moving">Расход в движении</string>
+    <string name="dash_consumption_idle">Расход на холостых</string>
+    <string name="dash_consumption_average">Средний за поездку</string>
+    <string name="dash_fuel_used">Израсходовано</string>
+    <string name="dash_trip_distance">Пройдено</string>
+    <string name="dash_consumption_record_hint">Средний расход и литры считаются по записи поездки — включите её на вкладке «Замеры». Мгновенный расход работает и без записи.</string>
     <string name="dash_close">Закрыть</string>
 
     <!-- Ошибки -->
@@ -66,6 +73,8 @@
     <string name="dtc_read">Считать ошибки</string>
     <string name="dtc_reading">Читаем…</string>
     <string name="dtc_none">Ошибок нет: ЭБУ не сохранил ни одного кода.</string>
+    <string name="dtc_read_failed">Прочитать коды не удалось: блок не ответил. Это не значит, что ошибок нет — проверьте, что зажигание включено, и повторите.</string>
+    <string name="dtc_count_mismatch">Расхождение: в ответе о лампе ЭБУ насчитал кодов — %1$d, а по запросу отдал — %2$d. Так бывает, когда счётчик в блоке учитывает и то, что не зажигает лампу, или когда коды хранит другой блок. Сырой ответ можно посмотреть в терминале на экране «Связь»: команда 03.</string>
     <string name="dtc_group_stored">Сохранённые</string>
     <string name="dtc_group_pending">Ожидающие подтверждения</string>
     <string name="dtc_group_permanent">Постоянные</string>
@@ -81,6 +90,21 @@
     <string name="dtc_clear_failed">ЭБУ не принял команду сброса</string>
     <string name="dtc_freeze_title">Стоп-кадр</string>
     <string name="dtc_freeze_hint">Что было с двигателем в момент, когда ЭБУ записал ошибку.</string>
+    <string name="modules_title">Другие блоки: ABS, подушки, АКПП</string>
+    <string name="modules_hint">Кнопка «Считать ошибки» выше спрашивает только двигатель — так устроен стандарт OBD-II. Если на панели горит ABS или подушка, её код лежит в своём блоке, со своим адресом на той же шине. Адреса производитель не публикует, поэтому приложение обходит весь диагностический диапазон и смотрит, кто отзовётся. Занимает около полуминуты. Только чтение: стирания чужих кодов здесь нет и не будет.</string>
+    <string name="modules_scan">Найти блоки</string>
+    <string name="modules_stop">Остановить</string>
+    <string name="modules_progress">Проверено адресов: %1$d из %2$d</string>
+    <string name="modules_none">Ни один блок не отозвался. Либо кроме двигателя на шине никого нет, либо блоки отвечают только на фирменный сканер.</string>
+    <string name="modules_not_possible">Поиск блоков работает только на 11-битной CAN. У этой машины протокол другой, и адреса блоков в нём устроены иначе — слать команды наугад приложение не станет.</string>
+    <string name="modules_module">Блок по адресу %1$s</string>
+    <string name="modules_engine_note">Это адрес из диапазона OBD-II — скорее всего двигатель или АКПП, их коды видны и обычным чтением выше.</string>
+    <string name="modules_refused">Блок есть, но коды не отдал: %1$s. Обычно это значит, что нужен фирменный сканер с ключом производителя.</string>
+    <string name="modules_no_codes">Блок ответил: ошибок нет.</string>
+    <string name="modules_status_active">неисправность сейчас</string>
+    <string name="modules_status_confirmed">код подтверждён</string>
+    <string name="modules_status_lamp">зажигает лампу на панели</string>
+    <string name="modules_failure_type">Уточнение отказа: %1$02X (обрыв, замыкание или значение вне диапазона — расшифровка у производителя).</string>
     <string name="dtc_monitors_title">Бортовые тесты</string>
     <string name="dtc_monitors_ready">Все тесты пройдены — к техосмотру готово</string>
     <string name="dtc_monitors_not_ready">Не завершено тестов: %1$d</string>

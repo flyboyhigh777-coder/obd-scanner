@@ -51,6 +51,9 @@ object Elm {
     const val HEADERS_OFF = "ATH0"
     const val HEADERS_ON = "ATH1"
     const val ADAPTIVE_TIMING_1 = "ATAT1"
+
+    /** `AT AT0` - без подстройки: ждём ровно столько, сколько задано ATST. */
+    const val ADAPTIVE_TIMING_OFF = "ATAT0"
     const val ADAPTIVE_TIMING_2 = "ATAT2"
     const val PROTOCOL_AUTO = "ATSP0"
 

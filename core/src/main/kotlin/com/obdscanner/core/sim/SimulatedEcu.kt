@@ -127,6 +127,9 @@ class SimulatedEcu(
 
     private val model = DrivingModel()
     private val start = clock()
+
+    /** Текущий адрес запроса (ATSH). По умолчанию - широковещательный OBD-II. */
+    private var header: Int = DEFAULT_HEADER
     private val pending = StringBuilder()
     private var closed = false
 
@@ -200,6 +203,9 @@ class SimulatedEcu(
 
     private fun respond(command: String): String {
         if (command.startsWith("AT")) return respondAt(command)
+        // Запрос адресован не двигателю, а другому блоку - значит и отвечать
+        // должен тот блок, а не этот.
+        if (header !in ENGINE_HEADERS) return respondModule(command)
         val service = command.substring(0, min(2, command.length)).toIntOrNull(16) ?: return prompt("?\r")
         return when (service) {
             0x01 -> respondCurrentData(command)
@@ -215,11 +221,46 @@ class SimulatedEcu(
     }
 
     private fun respondAt(command: String): String = when {
-        command == "ATZ" || command == "ATI" -> prompt("ELM327 v1.5 (SIM)\r")
+        command == "ATZ" || command == "ATI" -> {
+            header = DEFAULT_HEADER
+            prompt("ELM327 v1.5 (SIM)\r")
+        }
+        // Заголовок запроса - это и есть адрес блока, которому адресован
+        // следующий запрос.
+        command.startsWith("ATSH") ->
+            command.drop(4).trim().toIntOrNull(16)?.let { header = it; ok() } ?: prompt("?\r")
         command == "ATRV" -> prompt("%.1fV\r".format(Locale.ROOT, model.voltage(seconds())))
         command == "ATDPN" -> prompt("6\r")
         command.startsWith("ATDP") -> prompt("ISO 15765-4 (CAN 11/500)\r")
         else -> ok()
+    }
+
+    /**
+     * Ответ блока, которого нет в OBD-II.
+     *
+     * Адреса и коды здесь ВЫДУМАНЫ для симулятора. Настоящих адресов блоков
+     * УАЗ Патриот в открытом виде нет, и выдать придуманные за настоящие было
+     * бы хуже, чем не иметь никаких: человек стал бы искать неисправность по
+     * коду, которого в его машине нет. Здесь они нужны только чтобы в
+     * демо-режиме было видно, как работает поиск блоков.
+     *
+     * Три штуки нарочно разные: один отвечает по UDS, второй отказывается
+     * (так ведут себя блоки, которым нужен ключ производителя), третий говорит
+     * на старом KWP2000.
+     */
+    private fun respondModule(command: String): String {
+        val module = MODULES[header] ?: return noData()
+        return when {
+            command.startsWith("1902") -> when {
+                module.refuse != null -> frame(intArrayOf(0x7F, 0x19, module.refuse))
+                module.uds != null -> frame(intArrayOf(0x59, 0x02, 0xFF) + module.uds)
+                else -> frame(intArrayOf(0x7F, 0x19, 0x11))
+            }
+            command.startsWith("1800") ->
+                module.kwp?.let { frame(intArrayOf(0x58, it.size / 3) + it) }
+                    ?: frame(intArrayOf(0x7F, 0x18, 0x11))
+            else -> noData()
+        }
     }
 
     /**
@@ -358,4 +399,50 @@ class SimulatedEcu(
             else -> null
         }?.map { it.coerceIn(0, 255) }?.toIntArray()
     }
+    /** Что умеет один выдуманный блок. */
+    private class SimModule(
+        val uds: IntArray? = null,
+        val kwp: IntArray? = null,
+        val refuse: Int? = null,
+    )
+
+    private companion object {
+        /** Широковещательный адрес OBD-II и физический адрес блока двигателя. */
+        const val DEFAULT_HEADER = 0x7DF
+        val ENGINE_HEADERS = setOf(0x7DF, 0x7E0)
+
+        /** Коды UDS: два байта кода, байт уточнения отказа, байт статуса. */
+        private fun udsCodes(vararg codes: Pair<String, Int>): IntArray {
+            val out = ArrayList<Int>()
+            for ((code, failureType) in codes) {
+                val pair = DtcCodec.encode(code) ?: continue
+                out.add(pair.first)
+                out.add(pair.second)
+                out.add(failureType)
+                // 0x09 - "неисправность есть сейчас" плюс "код подтверждён".
+                out.add(0x09)
+            }
+            return out.toIntArray()
+        }
+
+        /** Коды KWP2000: два байта кода и байт статуса, без уточнения отказа. */
+        private fun kwpCodes(vararg codes: String): IntArray {
+            val out = ArrayList<Int>()
+            for (code in codes) {
+                val pair = DtcCodec.encode(code) ?: continue
+                out.add(pair.first)
+                out.add(pair.second)
+                out.add(0x09)
+            }
+            return out.toIntArray()
+        }
+
+        /** Выдуманные блоки на выдуманных адресах - см. respondModule. */
+        val MODULES = mapOf(
+            0x760 to SimModule(uds = udsCodes("C0031" to 0x11, "C0040" to 0x08)),
+            0x7A0 to SimModule(refuse = 0x33),
+            0x730 to SimModule(kwp = kwpCodes("B1234")),
+        )
+    }
+
 }

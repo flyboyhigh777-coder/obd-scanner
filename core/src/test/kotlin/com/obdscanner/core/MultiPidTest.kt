@@ -114,6 +114,125 @@ class MultiPidTest {
         assertEquals("весь набор уходит одной командой", 1, batched)
     }
 
+    /**
+     * Один неудачный цикл - ещё не приговор. Блок может промолчать, пока
+     * просыпается или пока крутится стартер; раньше этого хватало, чтобы
+     * выключить пакетный режим до конца поездки.
+     */
+    @Test
+    fun oneBadCycleDoesNotKillBatching() {
+        val clock = FakeClock()
+        val flaky = FlakyBatch(SimulatedEcu(clock = clock::now))
+        val obd = session(flaky, clock)
+        val pids = listOf(Pids.RPM, Pids.SPEED, Pids.COOLANT_TEMP, Pids.THROTTLE)
+
+        flaky.failBatches = 1
+        val duringFailure = obd.readAll(pids)
+        assertEquals("параметры всё равно прочитаны - по одному", 4, duringFailure.size)
+        assertTrue("пакетный режим остаётся включённым", obd.multiPidSupported)
+
+        val afterFailure = obd.readAll(pids)
+        assertEquals(4, afterFailure.size)
+        assertTrue(obd.multiPidSupported)
+    }
+
+    /** А вот несколько отказов подряд - это уже "не умеет". */
+    @Test
+    fun repeatedRefusalTurnsBatchingOff() {
+        val clock = FakeClock()
+        val flaky = FlakyBatch(SimulatedEcu(clock = clock::now))
+        val obd = session(flaky, clock)
+        val pids = listOf(Pids.RPM, Pids.SPEED, Pids.COOLANT_TEMP, Pids.THROTTLE)
+
+        flaky.failBatches = 50
+        repeat(5) { obd.readAll(pids) }
+        assertFalse("пакет не поддержан - больше не пробуем каждый цикл", obd.multiPidSupported)
+        assertEquals("но приборы читаются по одному", 4, obd.readAll(pids).size)
+    }
+
+    /**
+     * Молчит вся шина - виноват не пакетный запрос. Выключать его за обрыв
+     * связи значит приехать домой на поштучном опросе без всякой причины.
+     */
+    @Test
+    fun silentBusDoesNotBlameBatching() {
+        val clock = FakeClock()
+        val flaky = FlakyBatch(SimulatedEcu(clock = clock::now))
+        val obd = session(flaky, clock)
+        val pids = listOf(Pids.RPM, Pids.SPEED, Pids.COOLANT_TEMP, Pids.THROTTLE)
+
+        flaky.silent = true
+        repeat(5) { assertTrue("данных нет совсем", obd.readAll(pids).isEmpty()) }
+        assertTrue("пакетный режим не при чём", obd.multiPidSupported)
+
+        flaky.silent = false
+        assertEquals("связь вернулась - и пакет работает", 4, obd.readAll(pids).size)
+        assertTrue(obd.multiPidSupported)
+    }
+
+    /** Отказ не навсегда: время от времени пакет пробуется заново. */
+    @Test
+    fun batchingComesBackOnItsOwn() {
+        val clock = FakeClock()
+        val flaky = FlakyBatch(SimulatedEcu(clock = clock::now))
+        val obd = session(flaky, clock)
+        val pids = listOf(Pids.RPM, Pids.SPEED, Pids.COOLANT_TEMP, Pids.THROTTLE)
+
+        flaky.failBatches = 50
+        repeat(5) { obd.readAll(pids) }
+        assertFalse(obd.multiPidSupported)
+
+        // Блок пришёл в себя, но приложение об этом ещё не знает.
+        flaky.failBatches = 0
+        var cycles = 0
+        while (!obd.multiPidSupported && cycles < 1000) {
+            obd.readAll(pids)
+            cycles++
+        }
+        assertTrue("пакет вернулся сам, через $cycles циклов", obd.multiPidSupported)
+        assertTrue("но не мгновенно - пробовать каждый цикл дорого: $cycles", cycles > 10)
+        assertEquals("и снова одной командой", 4, obd.readAll(pids).size)
+    }
+
+    /**
+     * Канал, который может не отвечать на пакетные запросы (команда длиннее
+     * одного номера) или молчать вообще - как молчит шина при обрыве.
+     */
+    private class FlakyBatch(private val inner: ObdChannel) : ObdChannel {
+        /** Сколько ближайших пакетных запросов оставить без ответа. */
+        var failBatches = 0
+
+        /** Молчание на всё подряд - потеря связи с машиной. */
+        var silent = false
+
+        private var canned: ByteArray? = null
+        private var at = 0
+
+        override fun write(bytes: ByteArray) {
+            val command = String(bytes).trim()
+            val batch = command.length > 4 && command.startsWith("01")
+            if (silent || (batch && failBatches > 0)) {
+                if (batch && failBatches > 0) failBatches--
+                canned = "NO DATA\r\r>".toByteArray()
+                at = 0
+                return
+            }
+            canned = null
+            inner.write(bytes)
+        }
+
+        override fun read(dst: ByteArray): Int {
+            val answer = canned ?: return inner.read(dst)
+            if (at >= answer.size) return 0
+            val n = minOf(dst.size, answer.size - at)
+            System.arraycopy(answer, at, dst, 0, n)
+            at += n
+            return n
+        }
+
+        override fun close() = inner.close()
+    }
+
     /** Считает команды, реально ушедшие в адаптер. */
     private class CountingEcu(private val inner: ObdChannel) : ObdChannel {
         var commands = 0

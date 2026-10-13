@@ -9,6 +9,9 @@ import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdPayload
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.elm.ObdText
+import com.obdscanner.core.modules.FoundModule
+import com.obdscanner.core.modules.ModuleReply
+import com.obdscanner.core.modules.ModuleScan
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.ObdPid
@@ -89,16 +92,7 @@ class ObdSession(
         }
 
         onStage(ConnectStage.CONFIGURE)
-        // Эхо и переводы строк выключаем, чтобы разбирать только данные;
-        // заголовки выключаем, чтобы длинные ответы (VIN, список ошибок)
-        // собирал сам адаптер.
-        for (command in listOf(Elm.ECHO_OFF, Elm.LINEFEEDS_OFF, Elm.SPACES_OFF, Elm.HEADERS_OFF)) {
-            adapter.request(command, timeoutMillis = 1000)
-        }
-        // Адаптивный тайминг в обычном режиме, а не в агрессивном (ATAT2):
-        // клоны на агрессивном иногда обрывают ответ на середине, а выигрыш в
-        // скорости на фоне периода опроса незаметен.
-        adapter.request(Elm.ADAPTIVE_TIMING_1, timeoutMillis = 1000)
+        configureAdapter()
         adapter.request(Elm.setProtocol(preferredProtocol), timeoutMillis = 1000)
 
         onStage(ConnectStage.PROTOCOL)
@@ -132,13 +126,50 @@ class ObdSession(
         var base = 0x00
         while (PidSupport.hasNextRange(base, supported)) {
             base += 0x20
-            val reply = adapter.request(Elm.request(0x01, base), timeoutMillis = 2000)
-            val data = ObdPayload.data(reply, 0x01, base, expectedBytes = 4) ?: break
+            // Одна повторная попытка: если карта диапазона потерялась на
+            // полпути, молча теряется и всё, что за ней, - человек потом
+            // видит короткий список параметров и думает, что машина их не
+            // умеет.
+            var data = ObdPayload.data(
+                adapter.request(Elm.request(0x01, base), timeoutMillis = 2000),
+                0x01,
+                base,
+                expectedBytes = 4,
+            )
+            if (data == null) {
+                data = ObdPayload.data(
+                    adapter.request(Elm.request(0x01, base), timeoutMillis = 2000),
+                    0x01,
+                    base,
+                    expectedBytes = 4,
+                )
+            }
+            if (data == null) break
             supported.addAll(PidSupport.decode(base, data))
         }
         supportedPids = supported
         onStage(ConnectStage.DONE)
         return ConnectOutcome.Connected(adapterId, protocol, supportedPids)
+    }
+
+    /**
+     * Режим работы адаптера: что он печатает и как ждёт ответа.
+     *
+     * Вынесено из [connect] отдельно, потому что к тем же настройкам нужно
+     * вернуться после перебора блоков - там и заголовок запроса, и фильтр
+     * приёма, и тайминги сдвинуты.
+     */
+    private fun configureAdapter() {
+        // Эхо и переводы строк выключаем, чтобы разбирать только данные;
+        // заголовки выключаем, чтобы длинные ответы (VIN, список ошибок)
+        // собирал сам адаптер.
+        for (command in listOf(Elm.ECHO_OFF, Elm.LINEFEEDS_OFF, Elm.SPACES_OFF, Elm.HEADERS_OFF)) {
+            adapter.request(command, timeoutMillis = 1000)
+        }
+        // Адаптивный тайминг в обычном режиме, а не в агрессивном (ATAT2):
+        // клоны на агрессивном иногда обрывают ответ на середине, а выигрыш в
+        // скорости на фоне периода опроса незаметен.
+        adapter.request(Elm.ADAPTIVE_TIMING_1, timeoutMillis = 1000)
     }
 
     /** Поддерживает ли машина этот PID (по картам, прочитанным при подключении). */
@@ -169,28 +200,49 @@ class ObdSession(
         val out = LinkedHashMap<Int, Double>()
         val missing = ArrayList<ObdPid>()
 
-        if (multiPidWorks && pids.size > 1) {
-            var gotAnything = false
-            for (chunk in pids.chunked(Elm.MAX_PIDS_PER_REQUEST)) {
+        // Пакет пробуем, пока он работает, и изредка - даже после отказа.
+        // Один раз выключить его навсегда нельзя: блок может промолчать на
+        // первом цикле, пока просыпается, или в момент пуска двигателя, а
+        // расплачиваться за это секундой на кадр до конца поездки незачем.
+        val retrying = !multiPidWorks && ++cyclesSinceBatchOff >= BATCH_RETRY_CYCLES
+        val tryBatch = pids.size > 1 && (multiPidWorks || retrying)
+        var batchAnswered = false
+
+        if (tryBatch) {
+            if (retrying) cyclesSinceBatchOff = 0
+            val chunks = pids.chunked(Elm.MAX_PIDS_PER_REQUEST)
+            // На пробном цикле хватает одной пачки: ответил блок - со
+            // следующего цикла пакет снова работает целиком; не ответил -
+            // потеряно одно обращение, а не весь цикл.
+            val probe = if (retrying) chunks.take(1) else chunks
+            for (chunk in probe) {
                 val raw = readMulti(chunk)
-                if (raw.isNotEmpty()) gotAnything = true
+                if (raw.isNotEmpty()) batchAnswered = true
                 for (pid in chunk) {
                     val bytes = raw[pid.id]
                     if (bytes == null) missing.add(pid) else pid.decode(bytes)?.let { out[pid.id] = it }
                 }
             }
-            if (!gotAnything) {
-                // Ни одного ответа на пакетный запрос - этот адаптер или блок
-                // его не умеет. Второй раз не пробуем.
-                multiPidWorks = false
-                missing.clear()
-                missing.addAll(pids)
-            }
+            if (retrying) missing.addAll(chunks.drop(1).flatten())
         } else {
             missing.addAll(pids)
         }
 
         for (pid in missing) read(pid)?.let { out[pid.id] = it }
+
+        if (tryBatch) {
+            if (batchAnswered) {
+                multiPidWorks = true
+                batchFailures = 0
+            } else if (out.isNotEmpty()) {
+                // Пакет промолчал, а по одному параметры пришли - дело именно в
+                // пакетном запросе. Один такой цикл ещё ничего не значит,
+                // несколько подряд - уже не случайность.
+                if (++batchFailures >= BATCH_FAILURES_ALLOWED) multiPidWorks = false
+            }
+            // Молчит и пакет, и поштучное чтение - это обрыв связи, и пакетный
+            // режим тут ни при чём: выключать его было бы наказанием не за то.
+        }
         return out
     }
 
@@ -212,9 +264,23 @@ class ObdSession(
         readRaw(0x01, Pids.MONITOR_STATUS.id, expectedBytes = 4)?.let { MonitorStatus.decode(it) }
 
     /** Коды неисправностей. Таймаут больше обычного: ответ многокадровый. */
-    fun readDtcs(source: DtcSource): List<Dtc> {
+    fun readDtcs(source: DtcSource): List<Dtc> = readDtcsOrNull(source).orEmpty()
+
+    /**
+     * Коды ошибок; null - прочитать не удалось.
+     *
+     * Разница важнее, чем кажется: пустой список означает "ЭБУ ответил, кодов
+     * нет", а null - "ответа не было". Раньше и то и другое превращалось в
+     * пустой список, и экран бодро сообщал, что машина чистая, хотя на самом
+     * деле её просто не спросили.
+     *
+     * "NO DATA" при этом считается ответом: на запрос кодов блок так и молчит,
+     * когда сохранять нечего, - особенно на режим 0A, которого у многих машин
+     * нет вовсе. А вот обрыв, ошибка шины или молчание адаптера - это неудача.
+     */
+    fun readDtcsOrNull(source: DtcSource): List<Dtc>? {
         val reply = adapter.request(Elm.request(source.service), timeoutMillis = 3000)
-        if (reply.isError) return emptyList()
+        reply.error?.let { return if (it == ElmError.NO_DATA) emptyList() else null }
         return DtcCodec.parse(ObdPayload.allFrameData(reply, source.service), source)
     }
 
@@ -297,6 +363,124 @@ class ObdSession(
      * Только чтение. Запись (режим 2E) не делается нигде: оборванная запись
      * превращает блок в кирпич.
      */
+    // --- блоки вне OBD-II (ABS, подушки, АКПП) -----------------------------
+
+    /**
+     * Можно ли вообще искать другие блоки.
+     *
+     * Адресация блоков, которую мы умеем, - это 11-битная CAN: запрос уходит
+     * на 0x7xx, ответ приходит на восемь больше. На K-line и 29-битной CAN
+     * адреса устроены иначе, и честнее сказать "не умею", чем слать команды
+     * наугад.
+     */
+    val canScanModules: Boolean
+        get() = protocol == ObdProtocol.ISO15765_11_500 ||
+            protocol == ObdProtocol.ISO15765_11_250 ||
+            protocol == ObdProtocol.USER1 ||
+            protocol == ObdProtocol.USER2
+
+    /**
+     * Обходит диагностические адреса и собирает те, где кто-то живёт.
+     *
+     * Это единственный способ увидеть ошибку ABS: стандартные режимы 03/07/0A
+     * спрашивают только двигатель, и лампа ABS на панели для них не
+     * существует. Адреса блоков производитель не публикует, поэтому их
+     * приходится искать перебором - как это делают все сканеры.
+     *
+     * Опрос только читает. Сервис 19/18 ничего в блоке не меняет, а стирания
+     * чужих кодов в приложении нет: прерванная запись в блок ABS чинится уже
+     * не приложением.
+     */
+    fun scanModules(
+        from: Int = ModuleScan.FIRST_ADDRESS,
+        to: Int = ModuleScan.LAST_ADDRESS,
+        shouldStop: () -> Boolean = { false },
+        onProgress: (done: Int, total: Int, found: Int) -> Unit = { _, _, _ -> },
+    ): List<FoundModule> {
+        if (!canScanModules) return emptyList()
+        val first = from.coerceIn(ModuleScan.FIRST_ADDRESS, ModuleScan.LAST_ADDRESS)
+        val last = to.coerceIn(first, ModuleScan.LAST_ADDRESS)
+        val found = ArrayList<FoundModule>()
+        var done = 0
+        val total = last - first + 1
+        // Фильтр приёма на весь диапазон 0x700-0x7FF: иначе адаптер отдаёт
+        // только ответы блока двигателя и чужие просто не доходят. Если клон
+        // не понимает маску с "X", фильтр ставится на каждый адрес отдельно.
+        val wideFilter = adapter.request("ATCRA 7XX", timeoutMillis = 1000).isOk
+        try {
+            // Адаптивный тайминг на переборе только мешает: на молчащем адресе
+            // он растягивает ожидание, а адресов больше двух сотен.
+            adapter.request(Elm.ADAPTIVE_TIMING_OFF, timeoutMillis = 500)
+            adapter.request(Elm.timeout(MODULE_TIMEOUT_MILLIS), timeoutMillis = 500)
+            for (address in first..last) {
+                if (shouldStop()) break
+                readModule(address, wideFilter)?.let { found.add(FoundModule(address, it)) }
+                done++
+                onProgress(done, total, found.size)
+            }
+        } finally {
+            restoreStandardAddressing()
+        }
+        return found
+    }
+
+    /** Перечитать коды одного блока - после ремонта, не гоняя весь перебор. */
+    fun readModule(address: Int): FoundModule? {
+        if (!canScanModules) return null
+        val wideFilter = adapter.request("ATCRA 7XX", timeoutMillis = 1000).isOk
+        return try {
+            adapter.request(Elm.timeout(MODULE_TIMEOUT_MILLIS), timeoutMillis = 500)
+            readModule(address, wideFilter)?.let { FoundModule(address, it) }
+        } finally {
+            restoreStandardAddressing()
+        }
+    }
+
+    private fun readModule(address: Int, wideFilter: Boolean): ModuleReply? {
+        // Длинный список кодов приходит несколькими кадрами, и адаптер должен
+        // подтвердить приём первого. Отдельно это настраивать не надо:
+        // подтверждение он шлёт с текущего заголовка, а это как раз адрес
+        // блока, который мы спрашиваем.
+        adapter.request("ATSH%03X".format(address), timeoutMillis = 500)
+        if (!wideFilter) {
+            adapter.request("ATCRA%03X".format(ModuleScan.responseFor(address)), timeoutMillis = 500)
+        }
+        val uds = ModuleScan.parse(
+            ObdPayload.frames(adapter.request(ModuleScan.UDS_READ_DTC, MODULE_REPLY_MILLIS))
+        )
+        // Блок ответил кодами - дальше спрашивать нечего.
+        if (uds is ModuleReply.Codes) return uds
+        // Отказ "такого сервиса нет" означает, что блок есть, но говорит на
+        // старом KWP2000. Это единственный случай, когда стоит спросить второй
+        // раз: в остальном второй запрос удвоил бы время перебора.
+        if (uds is ModuleReply.Refused && uds.nrc in SERVICE_UNKNOWN) {
+            val kwp = ModuleScan.parse(
+                ObdPayload.frames(adapter.request(ModuleScan.KWP_READ_DTC, MODULE_REPLY_MILLIS))
+            )
+            if (kwp is ModuleReply.Codes) return kwp
+        }
+        return uds
+    }
+
+    /**
+     * Вернуть адресацию к обычному OBD-II.
+     *
+     * Без этого после перебора приборы перестают читаться: адаптер продолжает
+     * слать запросы на адрес последнего опрошенного блока.
+     */
+    private fun restoreStandardAddressing() {
+        adapter.request("ATCRA", timeoutMillis = 500)
+        adapter.request("ATSH7DF", timeoutMillis = 500)
+        adapter.request(Elm.ADAPTIVE_TIMING_1, timeoutMillis = 500)
+        adapter.request(Elm.timeout(DEFAULT_TIMEOUT_MILLIS), timeoutMillis = 500)
+        // Проверка, что обычный опрос снова работает. Если нет - полная
+        // настройка заново: лучше потерять секунду, чем оставить человека с
+        // замершими приборами и думать, что это адаптер отвалился.
+        if (read(Pids.RPM) == null && read(Pids.COOLANT_TEMP) == null) {
+            configureAdapter()
+        }
+    }
+
     fun scanService22(
         from: Int,
         to: Int,
@@ -354,9 +538,44 @@ class ObdSession(
      */
     private var multiPidWorks = true
 
+    /** Сколько циклов подряд пакет промолчал там, где поштучно всё читается. */
+    private var batchFailures = 0
+
+    /** Сколько циклов прошло с отказа от пакета - через BATCH_RETRY_CYCLES пробуем снова. */
+    private var cyclesSinceBatchOff = 0
+
     override fun close() = adapter.close()
 
     private companion object {
+        /**
+         * Сколько адаптер ждёт ответа на переборе блоков. Молчащих адресов
+         * больше двух сотен, и каждые лишние 50 мс - это ещё десять секунд
+         * ожидания с телефоном в руках.
+         */
+        const val MODULE_TIMEOUT_MILLIS = 100
+
+        /** Свой таймаут чуть больше адаптерного - чтобы успеть прочитать ответ. */
+        const val MODULE_REPLY_MILLIS = 900L
+
+        /** Таймаут шины в обычном режиме, к нему возвращаемся после перебора. */
+        const val DEFAULT_TIMEOUT_MILLIS = 200
+
+        /**
+         * Отказы в духе "такого сервиса у меня нет" - значит блок есть, но
+         * говорит на другом языке, и стоит спросить его по-старому (KWP2000).
+         */
+        val SERVICE_UNKNOWN = setOf(0x11, 0x12, 0x7E, 0x7F)
+
+        /**
+         * Столько неудач пакетного запроса подряд ещё списываем на занятый
+         * блок. Меньше нельзя: один промах на пуске двигателя переводил весь
+         * опрос в поштучный режим до конца поездки.
+         */
+        const val BATCH_FAILURES_ALLOWED = 3
+
+        /** Через столько циклов после отказа пакет пробуется снова. */
+        const val BATCH_RETRY_CYCLES = 120
+
         /**
          * Таймаут одного запроса при переборе. Большинство номеров не
          * существует, и на отказ блок отвечает сразу; ждать по секунде на

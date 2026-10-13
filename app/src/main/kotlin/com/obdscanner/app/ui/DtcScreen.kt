@@ -13,6 +13,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -48,6 +49,9 @@ import com.obdscanner.app.ui.theme.TextMuted
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.dtc.DtcSeverity
 import com.obdscanner.core.dtc.DtcTextSource
+import com.obdscanner.core.modules.ModuleDtc
+import com.obdscanner.core.modules.ModuleReply
+import com.obdscanner.core.modules.ModuleScan
 import com.obdscanner.core.obd.Pids
 
 /**
@@ -107,11 +111,24 @@ fun DtcScreen(viewModel: ObdViewModel) {
                     Text(stringResource(R.string.dtc_own_clear), color = GaugeAmber)
                 }
             }
-            if (dtc.loaded && dtc.total == 0) {
+            if (dtc.loaded && dtc.failed) {
+                // Блок промолчал. Зелёная точка здесь была бы враньём.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusDot(GaugeAmber)
+                    Text(stringResource(R.string.dtc_read_failed), color = TextBright)
+                }
+            } else if (dtc.loaded && dtc.total == 0) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatusDot(GaugeGreen)
                     Text(stringResource(R.string.dtc_none), color = TextBright)
                 }
+            }
+            // Счётчик кодов в ответе о лампе и список из режима 03 - разные
+            // источники, и они расходятся. Молча показать "ошибок нет" под
+            // счётчиком "2" нельзя: человек решит, что приложение врёт.
+            val counted = dtc.monitor?.dtcCount ?: 0
+            if (dtc.loaded && !dtc.failed && counted > dtc.stored.size) {
+                Hint(stringResource(R.string.dtc_count_mismatch, counted, dtc.stored.size))
             }
         }
 
@@ -145,6 +162,8 @@ fun DtcScreen(viewModel: ObdViewModel) {
                 }
             }
         }
+
+        ModulesPanel(viewModel)
 
         dtc.monitor?.let { monitor ->
             Panel {
@@ -281,6 +300,101 @@ private fun PhraseList(title: String, phrases: List<String>) {
  * человек вписывает один раз сам, и приложение перестаёт зависеть от того,
  * удалось ли автору её где-то достать.
  */
+/**
+ * Блоки, которых нет в OBD-II: ABS, подушки, АКПП, электроусилитель.
+ *
+ * Самый частый вопрос к любому дешёвому сканеру: "лампа ABS горит, а ошибок
+ * нет - почему?". Потому что стандартные режимы 03/07/0A спрашивают только
+ * блок управления двигателем. Остальные блоки сидят на той же шине, но со
+ * своими адресами, и адреса эти производитель не публикует - поэтому их
+ * приходится искать перебором.
+ */
+@Composable
+private fun ModulesPanel(viewModel: ObdViewModel) {
+    val modules by viewModel.modules.collectAsState()
+
+    Panel {
+        PanelTitle(stringResource(R.string.modules_title))
+        Hint(stringResource(R.string.modules_hint))
+
+        if (modules.loaded && !modules.possible) {
+            Text(stringResource(R.string.modules_not_possible), color = GaugeAmber)
+            return@Panel
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (modules.running) {
+                Button(onClick = viewModel::stopModuleScan) { Text(stringResource(R.string.modules_stop)) }
+                CircularProgressIndicator()
+            } else {
+                Button(onClick = viewModel::scanModules) { Text(stringResource(R.string.modules_scan)) }
+            }
+        }
+
+        if (modules.running && modules.total > 0) {
+            // Перебор идёт полминуты, и без доли сделанного это выглядит как
+            // зависшее приложение.
+            LinearProgressIndicator(
+                progress = { modules.done.toFloat() / modules.total },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Hint(stringResource(R.string.modules_progress, modules.done, modules.total))
+        }
+
+        if (modules.loaded && !modules.running && modules.found.isEmpty()) {
+            Text(stringResource(R.string.modules_none), color = TextBright)
+        }
+    }
+
+    modules.found.forEach { module ->
+        Panel {
+            PanelTitle(stringResource(R.string.modules_module, module.hex))
+            if (ModuleScan.isStandardObd(module.address)) {
+                Hint(stringResource(R.string.modules_engine_note))
+            }
+            module.systems.forEach { Hint(it) }
+
+            when (val reply = module.reply) {
+                is ModuleReply.Refused -> Text(
+                    stringResource(R.string.modules_refused, reply.reason),
+                    color = GaugeAmber
+                )
+
+                is ModuleReply.Codes -> {
+                    Hint(reply.protocol.title)
+                    if (reply.dtcs.isEmpty()) {
+                        Text(stringResource(R.string.modules_no_codes), color = GaugeGreen)
+                    }
+                    reply.dtcs.forEach { dtc ->
+                        ModuleDtcRow(dtc)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModuleDtcRow(dtc: ModuleDtc) {
+    Column(Modifier.padding(top = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusDot(if (dtc.active == true) GaugeRed else GaugeAmber)
+            Text(dtc.full, color = TextBright, style = MaterialTheme.typography.titleMedium)
+        }
+        val described = dtc.described
+        Text(described.description, color = TextMuted)
+        // Статус из UDS говорит больше, чем сам код: одно дело - неисправность
+        // прямо сейчас, другое - запись о том, что было когда-то.
+        val status = buildList {
+            if (dtc.active == true) add(stringResource(R.string.modules_status_active))
+            if (dtc.confirmed == true) add(stringResource(R.string.modules_status_confirmed))
+            if (dtc.lampRequested == true) add(stringResource(R.string.modules_status_lamp))
+        }
+        if (status.isNotEmpty()) Hint(status.joinToString(" | "))
+        dtc.failureType?.let { Hint(stringResource(R.string.modules_failure_type, it)) }
+    }
+}
+
 @Composable
 private fun OwnDescriptionDialog(
     code: String,

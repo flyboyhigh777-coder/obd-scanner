@@ -241,4 +241,63 @@ class ObdSessionTest {
         assertNotNull(outcome.error)
         assertTrue(outcome.message.contains("зажигание", ignoreCase = true))
     }
+    /**
+     * Ошибка шины при чтении кодов - это не "кодов нет". Разница не
+     * академическая: экран с зелёной точкой и надписью "ошибок нет" человек
+     * принимает за диагноз и едет дальше.
+     */
+    @Test
+    fun failedDtcReadIsNotTheSameAsNoCodes() {
+        val clock = FakeClock()
+        val channel = CannedFor(SimulatedEcu(clock = clock::now), "03", "CAN ERROR")
+        val obd = ObdSession(ElmAdapter(channel, sleep = clock::sleep, now = clock::now))
+        obd.connect()
+
+        assertNull("блок не ответил - списка нет", obd.readDtcsOrNull(DtcSource.STORED))
+    }
+
+    /** А "NO DATA" на запрос кодов - это ответ: сохранять нечего. */
+    @Test
+    fun noDataOnDtcRequestMeansNoCodes() {
+        val clock = FakeClock()
+        val channel = CannedFor(SimulatedEcu(clock = clock::now), "0A", "NO DATA")
+        val obd = ObdSession(ElmAdapter(channel, sleep = clock::sleep, now = clock::now))
+        obd.connect()
+
+        val codes = obd.readDtcsOrNull(DtcSource.PERMANENT)
+        assertNotNull("молчание на запрос кодов - это тоже ответ", codes)
+        assertTrue(codes!!.isEmpty())
+    }
+
+    /** Канал, подменяющий ответ на одну команду - чтобы изобразить отказ. */
+    private class CannedFor(
+        private val inner: ObdChannel,
+        private val command: String,
+        private val answer: String
+    ) : ObdChannel {
+        private var canned: ByteArray? = null
+        private var at = 0
+
+        override fun write(bytes: ByteArray) {
+            if (String(bytes).trim().equals(command, ignoreCase = true)) {
+                canned = "$answer\r\r>".toByteArray()
+                at = 0
+                return
+            }
+            canned = null
+            inner.write(bytes)
+        }
+
+        override fun read(dst: ByteArray): Int {
+            val reply = canned ?: return inner.read(dst)
+            if (at >= reply.size) return 0
+            val n = minOf(dst.size, reply.size - at)
+            System.arraycopy(reply, at, dst, 0, n)
+            at += n
+            return n
+        }
+
+        override fun close() = inner.close()
+    }
+
 }

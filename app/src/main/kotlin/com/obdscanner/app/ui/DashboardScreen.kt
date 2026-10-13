@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
+import com.obdscanner.app.LiveSnapshot
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
 import com.obdscanner.app.ui.theme.GaugeAmber
@@ -35,11 +36,13 @@ import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GaugeRed
 import com.obdscanner.app.ui.theme.GradientTopBar
 import com.obdscanner.app.ui.theme.Hint
+import com.obdscanner.app.ui.theme.InfoRow
 import com.obdscanner.app.ui.theme.Panel
 import com.obdscanner.app.ui.theme.tileColumns
 import com.obdscanner.app.ui.theme.uiScale
 import com.obdscanner.app.ui.theme.StatusDot
 import com.obdscanner.app.ui.theme.TextBright
+import com.obdscanner.app.ui.theme.TextMuted
 import com.obdscanner.core.obd.ObdPid
 import com.obdscanner.core.obd.ObdUnit
 import com.obdscanner.core.obd.Pids
@@ -66,6 +69,8 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     val profile by viewModel.profile.collectAsState()
     val performance by viewModel.performance.collectAsState()
     var chooser by remember { mutableStateOf(false) }
+    // Показывать ли параметры, о которых машина не сообщала.
+    var showAll by remember { mutableStateOf(false) }
 
     val columns = tileColumns()
     val scale = uiScale()
@@ -128,7 +133,11 @@ fun DashboardScreen(viewModel: ObdViewModel) {
             }
         }
 
-        // Передача, запас хода и расход - то, чего нет ни в одном PID, но что
+        // Расход - сразу под оборотами и скоростью и той же величиной цифр:
+        // на него смотрят так же часто, а не ищут среди прочих плиток.
+        FuelPanel(viewModel, live, units)
+
+        // Передача и запас хода - то, чего нет ни в одном PID, но что
         // считается из них и профиля машины.
         Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
             ValueTile(
@@ -144,10 +153,6 @@ fun DashboardScreen(viewModel: ObdViewModel) {
         }
         if (performance.learnedGears in 1..7 && live.gear == null) {
             Hint(stringResource(R.string.dash_gear_learning, performance.learnedGears))
-        }
-
-        consumptionText(live.litresPer100Km, live.litresPerHour, units)?.let {
-            ValueTile(stringResource(R.string.dash_consumption), it, Modifier.fillMaxWidth())
         }
 
         // Остальные выбранные параметры - по две плитки в ряд: больше на телефоне
@@ -212,14 +217,43 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Hint(stringResource(R.string.dash_choose_hint), Modifier.padding(bottom = 6.dp))
-                    supported.filter { it.id !in Pids.STATIC && it.unit != ObdUnit.NONE }.forEach { pid ->
+                    // Список короткий не потому, что приложение мало умеет, а
+                    // потому что машина сама сообщила только эти параметры.
+                    // Но блоки бывают скромные: заявляют меньше, чем отдают, -
+                    // поэтому остальные можно показать и включить вручную.
+                    val supportedIds = supported.map { it.id }.toSet()
+                    val list = if (showAll) {
+                        Pids.ALL.filter { it.id !in Pids.STATIC && it.unit != ObdUnit.NONE }
+                    } else {
+                        supported.filter { it.id !in Pids.STATIC && it.unit != ObdUnit.NONE }
+                    }
+                    list.forEach { pid ->
+                        val known = pid.id in supportedIds
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = pid.id in selected,
                                 onCheckedChange = { viewModel.toggleDashboardPid(pid.id) }
                             )
-                            Text(pid.title, color = TextBright, style = MaterialTheme.typography.bodyMedium)
+                            Column {
+                                Text(
+                                    pid.title,
+                                    color = if (known) TextBright else TextMuted,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (!known) Hint(stringResource(R.string.dash_choose_unlisted))
+                            }
                         }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Checkbox(checked = showAll, onCheckedChange = { showAll = it })
+                        Text(
+                            stringResource(R.string.dash_choose_show_all, Pids.ALL.size, supported.size),
+                            color = TextBright,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
@@ -274,6 +308,96 @@ private fun fractionFor(pid: ObdPid, value: Double, units: UnitSystem, profile: 
  * Расход показываем на сотню, только когда машина едет: на стоянке литры на
  * 100 км не определены, и там честнее литры в час.
  */
+/**
+ * Расход топлива отдельным блоком.
+ *
+ * Мгновенный расход считается по-разному в движении и на месте, и это не
+ * прихоть: литры на сотню при нулевой скорости - деление на ноль, а литры в
+ * час на ходу ничего не говорят. Поэтому в движении показывается л/100 км, на
+ * месте - л/ч, и подпись меняется вместе с числом.
+ *
+ * Средний расход и литры берутся из записи поездки: без неё их не из чего
+ * считать, и вместо выдуманного числа лучше сказать, какую кнопку нажать.
+ */
+@Composable
+private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSystem) {
+    val trip by viewModel.trip.collectAsState()
+    val scale = uiScale()
+    val moving = live.litresPer100Km != null
+
+    Panel {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    stringResource(
+                        if (moving) R.string.dash_consumption_moving else R.string.dash_consumption_idle
+                    ),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = scale.label,
+                        lineHeight = scale.label * 1.3f
+                    ),
+                    color = TextMuted
+                )
+                Text(
+                    consumptionText(live.litresPer100Km, live.litresPerHour, units)
+                        ?: stringResource(R.string.common_dash),
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        fontSize = scale.gaugeValue,
+                        lineHeight = scale.gaugeValue * 1.15f
+                    ),
+                    color = TextBright,
+                    maxLines = 1
+                )
+            }
+            live.values[Pids.FUEL_LEVEL.id]?.let { level ->
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        Pids.FUEL_LEVEL.title,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = scale.label,
+                            lineHeight = scale.label * 1.3f
+                        ),
+                        color = TextMuted,
+                        maxLines = 1
+                    )
+                    Text(
+                        Format.value(Pids.FUEL_LEVEL, level, units),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = scale.value,
+                            lineHeight = scale.value * 1.15f
+                        ),
+                        color = TextBright,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        if (trip.recording || trip.stats.sampleCount > 0) {
+            InfoRow(
+                stringResource(R.string.dash_consumption_average),
+                trip.stats.consumptionL100Km
+                    ?.let { Format.value(it, ObdUnit.LITRE_PER_100KM, 1, units) }
+                    ?: stringResource(R.string.common_dash)
+            )
+            val used = UnitConversion.litres(trip.stats.fuelLitres, units)
+            InfoRow(
+                stringResource(R.string.dash_fuel_used),
+                "${Format.number(used.value, 2)} ${used.unit}"
+            )
+            InfoRow(
+                stringResource(R.string.dash_trip_distance),
+                Format.value(trip.stats.distanceKm, ObdUnit.KM, 1, units)
+            )
+        } else {
+            Hint(stringResource(R.string.dash_consumption_record_hint))
+        }
+    }
+}
+
 private fun consumptionText(litresPer100Km: Double?, litresPerHour: Double?, units: UnitSystem): String? = when {
     litresPer100Km != null -> Format.value(litresPer100Km, ObdUnit.LITRE_PER_100KM, 1, units)
     litresPerHour != null -> Format.value(litresPerHour, ObdUnit.LITRE_PER_HOUR, 2, units)
