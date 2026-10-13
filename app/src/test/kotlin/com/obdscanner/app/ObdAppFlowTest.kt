@@ -114,6 +114,18 @@ class ObdAppFlowTest {
         assertTrue("обороты в разумных пределах: ${values[0x0C]}", values[0x0C]!! in 500.0..7000.0)
         assertNotNull("лампа Check Engine прочитана", vm.live.value.monitor)
         assertTrue("виртуальная машина с горящей лампой", vm.live.value.monitor!!.milOn)
+
+        // Частота на экране должна считаться по полному циклу. Пока она мерилась
+        // по одному обмену, экран обещал вдвое больше обновлений, чем приборы
+        // успевают: пауза между циклами в расчёт не попадала.
+        val snapshot = vm.live.value
+        val pause = vm.pollInterval.value
+        assertEquals(
+            "цикл = обмен с адаптером (${snapshot.workMillis} мс) + пауза ($pause мс)",
+            snapshot.workMillis + pause,
+            snapshot.cycleMillis
+        )
+        assertEquals("частота считается по полному циклу", 1000.0 / snapshot.cycleMillis, snapshot.hz!!, 0.001)
         shot("04_dashboard")
 
         // Ошибки: читаем все три режима и стоп-кадр.

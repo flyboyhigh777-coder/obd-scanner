@@ -346,14 +346,25 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             )
             Hint(stringResource(R.string.connect_poll_hint))
 
-            // Настоящая частота важнее настройки: упирается всё в обмен с
-            // адаптером, а не в паузу между циклами, и увидеть это можно
-            // только на живой машине.
+            // Настоящая частота важнее настройки: сколько из цикла уходит на
+            // обмен с адаптером, а сколько на паузу, видно только на живой
+            // машине - и от этого зависит, что вообще стоит крутить.
             val live by viewModel.live.collectAsState()
             live.hz?.let { hz ->
                 InfoRow(
                     stringResource(R.string.connect_rate),
                     stringResource(R.string.connect_rate_value, hz, live.cycleMillis)
+                )
+                Hint(
+                    if (pollInterval > 0 && live.workMillis > 0) {
+                        stringResource(
+                            R.string.connect_rate_detail,
+                            live.workMillis,
+                            1000.0 / live.workMillis
+                        )
+                    } else {
+                        stringResource(R.string.connect_rate_detail_max)
+                    }
                 )
                 Hint(
                     stringResource(

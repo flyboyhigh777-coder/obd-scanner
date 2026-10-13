@@ -93,11 +93,18 @@ data class LiveSnapshot(
     val monitor: MonitorStatus? = null,
     val updatedAtMillis: Long = 0,
     /**
-     * Сколько заняло последнее обновление, мс. Показывается рядом с ползунком
-     * периода: без этого числа непонятно, что упирается не в настройку, а в
-     * сам обмен с адаптером.
+     * Полный цикл обновления, мс: обмен с адаптером плюс пауза из настройки.
+     * Именно по нему считается частота на экране. Мерить один обмен нельзя -
+     * пауза для стрелок такое же ожидание, и число выходило вдвое больше
+     * настоящего.
      */
     val cycleMillis: Long = 0,
+    /**
+     * Сколько из цикла занял сам обмен с адаптером, мс. Показывается рядом с
+     * ползунком периода: без этого числа непонятно, упирается частота в
+     * настройку или уже в адаптер.
+     */
+    val workMillis: Long = 0,
     /** Удалось ли спрашивать параметры пакетом - от этого зависит скорость. */
     val batched: Boolean = false,
 ) {
@@ -732,9 +739,15 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             // Статус лампы Check Engine меняется редко - спрашиваем его не каждый
             // цикл, чтобы не отнимать время у приборов.
             val monitor = if (cycle % MONITOR_EVERY == 0) session.readMonitorStatus() else _live.value.monitor
-            publish(values, custom, monitor, System.currentTimeMillis() - startedAt, session.multiPidSupported)
+            // Цикл - это обмен плюс пауза: стрелки меняются раз в такой цикл,
+            // и частота считается по нему. Пауза берётся в локальную
+            // переменную, чтобы показанное число и настоящее ожидание не
+            // разъехались, если настройку подвинут прямо сейчас.
+            val pause = _pollInterval.value.toLong()
+            val work = System.currentTimeMillis() - startedAt
+            publish(values, custom, monitor, work + pause, work, session.multiPidSupported)
             cycle++
-            delay(_pollInterval.value.toLong())
+            delay(pause)
         }
     }
 
@@ -931,6 +944,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         custom: Map<String, Double>,
         monitor: MonitorStatus?,
         cycleMillis: Long = 0,
+        workMillis: Long = 0,
         batched: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
@@ -984,6 +998,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             monitor = monitor,
             updatedAtMillis = now,
             cycleMillis = cycleMillis,
+            workMillis = workMillis,
             batched = batched,
         )
         if (recording && values.isNotEmpty()) {

@@ -37,7 +37,7 @@
     <string name="connect_pid_count">Supported parameters</string>
     <string name="connect_settings">Settings</string>
     <string name="connect_poll_interval">Poll interval: %1$d ms</string>
-    <string name="connect_poll_hint">This is the pause between cycles, not the polling speed: one exchange with the adapter costs 25-60 ms and usually sets the rate. Zero means no pause. Cheap adapters start losing answers with no pause - if values freeze, increase it.</string>
+    <string name="connect_poll_hint">This is the pause between cycles: parameters refresh once per exchange-plus-pause. One exchange costs 25-60 ms, and there are more parameters than fit in a single request - that is where the whole cycle comes from. Zero means no pause. Cheap adapters start losing answers with no pause: if values freeze, increase it.</string>
     <string name="connect_units">Units</string>
     <string name="connect_units_metric">Metric</string>
     <string name="connect_units_imperial">Imperial</string>
@@ -279,6 +279,8 @@
     <string name="vehicle_battery_ah">Battery capacity, Ah</string>
     <string name="connect_rate">Actual</string>
     <string name="connect_rate_value">%1$.1f per second (%2$d ms)</string>
+    <string name="connect_rate_detail">Of that, %1$d ms is the exchange with the adapter and the rest is the pause set above. With no pause it would be about %2$.1f per second.</string>
+    <string name="connect_rate_detail_max">The pause is off - all of this time is the exchange with the adapter, and it will not answer any faster.</string>
     <string name="connect_batched">Parameters are requested in one batch — all in a single exchange with the adapter. This is the fastest mode.</string>
     <string name="connect_not_batched">This adapter or ECU does not support batched requests, so parameters are read one by one and the cycle is that many times longer.</string>
 </resources>
