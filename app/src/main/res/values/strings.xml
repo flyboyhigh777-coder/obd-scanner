@@ -83,6 +83,14 @@
     <string name="dtc_none">Ошибок нет: ЭБУ не сохранил ни одного кода.</string>
     <string name="dtc_read_failed">Прочитать коды не удалось: блок не ответил. Это не значит, что ошибок нет — проверьте, что зажигание включено, и повторите.</string>
     <string name="dtc_count_mismatch">Расхождение: в ответе о лампе ЭБУ насчитал кодов — %1$d, а по запросу отдал — %2$d. Так бывает, когда счётчик в блоке учитывает и то, что не зажигает лампу, или когда коды хранит другой блок. Сырой ответ можно посмотреть в терминале на экране «Связь»: команда 03.</string>
+    <string name="archive_title">Прочитанное раньше</string>
+    <string name="archive_hint">Сохраняется само после каждого чтения и видно без машины — чтобы разбираться с кодами дома, а не в гараже с телефоном в зубах. Хранятся последние десять чтений.</string>
+    <string name="archive_empty">Пока пусто. После первого чтения ошибок записи появятся здесь и останутся, даже когда адаптер вынут.</string>
+    <string name="archive_count">Кодов: %1$d</string>
+    <string name="archive_no_codes">Ошибок не было</string>
+    <string name="archive_modules">Другие блоки</string>
+    <string name="archive_share">Отправить</string>
+    <string name="archive_clear">Очистить архив</string>
     <string name="dtc_group_stored">Сохранённые</string>
     <string name="dtc_group_pending">Ожидающие подтверждения</string>
     <string name="dtc_group_permanent">Постоянные</string>

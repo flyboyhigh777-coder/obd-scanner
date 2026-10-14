@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.obdscanner.app.data.AppSettings
 import com.obdscanner.app.data.DocumentationDtc
+import com.obdscanner.app.data.DtcArchiveStore
 import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.app.data.ExportResult
 import com.obdscanner.app.data.TripExport
@@ -16,12 +17,14 @@ import com.obdscanner.app.transport.ConnectionTarget
 import com.obdscanner.app.transport.DiscoveredDevice
 import com.obdscanner.app.transport.DemoObdChannel
 import com.obdscanner.app.transport.WifiObdChannel
+import com.obdscanner.core.dtc.ArchivedModuleDtc
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.electrical.Battery
 import com.obdscanner.core.electrical.BatteryMonitor
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.electrical.CrankingResult
 import com.obdscanner.core.dtc.DtcCatalog
+import com.obdscanner.core.dtc.DtcSnapshot
 import com.obdscanner.core.dtc.DtcSource
 import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdProtocol
@@ -280,6 +283,15 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     val modules: StateFlow<ModuleScanState> = _modules.asStateFlow()
 
     /**
+     * Прочитанные ошибки, которые остаются после отключения.
+     *
+     * Коды читают в гараже, а разбираются с ними дома: пока список жил только
+     * в памяти, он пропадал ровно тогда, когда становился нужен.
+     */
+    private val _archive = MutableStateFlow(DtcArchiveStore.load(application))
+    val archive: StateFlow<List<DtcSnapshot>> = _archive.asStateFlow()
+
+    /**
      * Меняется при каждой правке своих расшифровок. Нужен только для того,
      * чтобы список кодов перерисовался: сами расшифровки живут в справочнике
      * :core, и Compose не может следить за ними напрямую.
@@ -383,6 +395,14 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile
     private var pidScanStop = false
     private var moduleScanStop = false
+
+    /**
+     * Время начала подключения - оно же метка записи в архиве. Одно
+     * подключение даёт одну запись: коды двигателя и обход блоков делаются по
+     * очереди, и разносить их по разным строкам архива значит заставлять
+     * человека складывать их обратно глазами.
+     */
+    private var sessionStartedAt = 0L
 
     /** Снимок значений для сравнения "до и после". */
     private var pidSnapshot: List<ScanHit> = emptyList()
@@ -729,6 +749,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
                 is ConnectOutcome.Connected -> {
                     established = true
+                    // Новое подключение - новая запись в архиве.
+                    sessionStartedAt = System.currentTimeMillis()
                     _supportedPids.value = Pids.ALL.filter { it.id in outcome.supportedPids }
                     ensureDashboardSelection()
                     _connection.value = ConnectionState.Connected(
@@ -1017,6 +1039,35 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             },
         )
         _modules.value = ModuleScanState(running = false, loaded = true, found = found)
+        archiveCurrentReading()
+    }
+
+    /**
+     * Складывает в архив всё, что прочитано за это подключение.
+     *
+     * Коды двигателя и обход блоков попадают в одну запись: читают их по
+     * очереди, а смотреть потом будут вместе.
+     */
+    private fun archiveCurrentReading() {
+        val dtc = _dtc.value
+        val snapshot = DtcSnapshot(
+            timeMillis = if (sessionStartedAt > 0) sessionStartedAt else System.currentTimeMillis(),
+            vehicle = _profile.value.name,
+            vin = _vehicle.value.vin,
+            stored = dtc.stored.map { it.code },
+            pending = dtc.pending.map { it.code },
+            permanent = dtc.permanent.map { it.code },
+            modules = _modules.value.found.flatMap { module ->
+                module.dtcs.map { ArchivedModuleDtc(module.address, it.full) }
+            },
+            milOn = dtc.monitor?.milOn ?: false,
+        )
+        _archive.value = DtcArchiveStore.add(getApplication(), snapshot)
+    }
+
+    /** Очистить архив - его смотрят глазами, и мусор в нём мешает. */
+    fun clearArchive() {
+        _archive.value = DtcArchiveStore.clear(getApplication())
     }
 
     /** Запоминает текущие значения, чтобы потом сравнить с ними. */
@@ -1208,6 +1259,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                     monitor = monitor,
                     freezeFrame = freeze
                 )
+                archiveCurrentReading()
             }
 
             ObdTask.ClearDtcs -> {

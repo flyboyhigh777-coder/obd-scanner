@@ -135,6 +135,13 @@ class ObdAppFlowTest {
         pumpUntil(30_000, "чтение кодов ошибок") { vm.dtc.value.loaded }
         val dtc = vm.dtc.value
         assertEquals(listOf("P0301", "P0171", "P0420", "P1513"), dtc.stored.map { it.code })
+
+        // Архив: прочитанное обязано пережить отключение от машины - смотреть
+        // коды будут дома, когда адаптер уже вынут.
+        val archived = vm.archive.value.firstOrNull()
+        assertNotNull("чтение попало в архив", archived)
+        assertEquals(dtc.stored.map { it.code }, archived!!.stored)
+        assertTrue("и архив виден на экране", archived.total > 0)
         assertEquals(listOf("P0133"), dtc.pending.map { it.code })
         assertEquals(listOf("P0420"), dtc.permanent.map { it.code })
         assertTrue("стоп-кадр заполнен: ${dtc.freezeFrame}", dtc.freezeFrame.isNotEmpty())
@@ -284,5 +291,19 @@ class ObdAppFlowTest {
         compose.onNodeWithText("Отключиться").performScrollTo().performClick()
         pumpUntil(10_000, "разрыв связи") { vm.connection.value is ConnectionState.Disconnected }
         shot("16_disconnected")
+
+        // И главное про архив: без машины коды всё равно на экране. Ради
+        // этого он и делался - разбираются с кодами дома, а не в гараже.
+        openTab("Ошибки")
+        compose.waitForIdle()
+        assertTrue(
+            "архив виден без подключения",
+            compose.onAllNodesWithText("Прочитанное раньше").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            "и коды в нём тоже",
+            compose.onAllNodesWithText("P0301", substring = true).fetchSemanticsNodes().isNotEmpty()
+        )
+        shot("19_dtc_archive_offline")
     }
 }

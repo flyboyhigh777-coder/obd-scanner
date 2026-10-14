@@ -79,6 +79,14 @@
     <string name="dtc_none">No faults: the ECU has not stored a single code.</string>
     <string name="dtc_read_failed">Could not read the codes: the ECU did not answer. That does not mean there are none - check that the ignition is on and try again.</string>
     <string name="dtc_count_mismatch">Mismatch: the lamp status reports %1$d stored codes, but the request returned %2$d. This happens when the counter in the ECU also counts codes that do not light the lamp, or when another module holds them. The raw answer is visible in the adapter terminal on the Connection screen: command 03.</string>
+    <string name="archive_title">Read earlier</string>
+    <string name="archive_hint">Saved automatically after every read and visible without the car - so the codes can be worked through at home instead of in the garage. The last ten reads are kept.</string>
+    <string name="archive_empty">Empty so far. After the first read the entries appear here and stay, even once the adapter is unplugged.</string>
+    <string name="archive_count">Codes: %1$d</string>
+    <string name="archive_no_codes">No faults were found</string>
+    <string name="archive_modules">Other modules</string>
+    <string name="archive_share">Share</string>
+    <string name="archive_clear">Clear the archive</string>
     <string name="dtc_group_stored">Stored</string>
     <string name="dtc_group_pending">Pending</string>
     <string name="dtc_group_permanent">Permanent</string>

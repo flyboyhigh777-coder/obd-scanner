@@ -1,7 +1,9 @@
 package com.obdscanner.app.ui
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,12 +50,17 @@ import com.obdscanner.app.ui.theme.StatusDot
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 import com.obdscanner.core.dtc.Dtc
+import com.obdscanner.core.dtc.DtcArchive
 import com.obdscanner.core.dtc.DtcSeverity
+import com.obdscanner.core.dtc.DtcSnapshot
 import com.obdscanner.core.dtc.DtcTextSource
 import com.obdscanner.core.modules.ModuleDtc
 import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
 import com.obdscanner.core.obd.Pids
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Ошибки: чтение сохранённых, ожидающих и постоянных кодов, стоп-кадр,
@@ -85,7 +93,10 @@ fun DtcScreen(viewModel: ObdViewModel) {
         GradientTopBar(stringResource(R.string.dtc_title))
 
         if (connection !is ConnectionState.Connected) {
+            // Без связи экран раньше был пуст - а именно в этот момент коды и
+            // начинают разглядывать: адаптер вынут, человек сидит дома.
             Panel { Hint(stringResource(R.string.dash_offline)) }
+            ArchivePanel(viewModel)
             return@Column
         }
 
@@ -187,6 +198,8 @@ fun DtcScreen(viewModel: ObdViewModel) {
                 }
             }
         }
+
+        ArchivePanel(viewModel)
 
         if (dtc.stored.isNotEmpty() || dtc.pending.isNotEmpty()) {
             Button(
@@ -394,6 +407,124 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
         dtc.failureType?.let { Hint(stringResource(R.string.modules_failure_type, it)) }
     }
 }
+
+/**
+ * Архив прочитанного.
+ *
+ * Самое нужное здесь - то, что он виден БЕЗ машины. Коды читают в гараже, а
+ * разбираются с ними потом, дома и с поиском; пока список жил только в памяти
+ * приложения, он пропадал вместе со связью - ровно в тот момент, когда
+ * становился нужен.
+ */
+@Composable
+private fun ArchivePanel(viewModel: ObdViewModel) {
+    val archive by viewModel.archive.collectAsState()
+    val context = LocalContext.current
+
+    Panel {
+        PanelTitle(stringResource(R.string.archive_title))
+        if (archive.isEmpty()) {
+            Hint(stringResource(R.string.archive_empty))
+            return@Panel
+        }
+        Hint(stringResource(R.string.archive_hint))
+        archive.forEachIndexed { index, snapshot ->
+            ArchiveEntry(snapshot, expandedByDefault = index == 0) {
+                val text = DtcArchive.asText(snapshot, archiveDate(snapshot.timeMillis))
+                context.startActivity(
+                    Intent.createChooser(
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        },
+                        null
+                    )
+                )
+            }
+        }
+        TextButton(onClick = viewModel::clearArchive) {
+            Text(stringResource(R.string.archive_clear), color = GaugeAmber)
+        }
+    }
+}
+
+@Composable
+private fun ArchiveEntry(snapshot: DtcSnapshot, expandedByDefault: Boolean, onShare: () -> Unit) {
+    var expanded by remember(snapshot.timeMillis) { mutableStateOf(expandedByDefault) }
+
+    Column(Modifier.padding(top = 10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    archiveDate(snapshot.timeMillis),
+                    color = TextBright,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Hint(
+                    if (snapshot.isEmpty) {
+                        stringResource(R.string.archive_no_codes)
+                    } else {
+                        stringResource(R.string.archive_count, snapshot.total)
+                    }
+                )
+            }
+            TextButton(onClick = onShare) {
+                Text(stringResource(R.string.archive_share), color = TextBright)
+            }
+        }
+
+        if (!expanded) return@Column
+
+        Hint(snapshot.vehicle)
+        snapshot.vin?.let { Hint("VIN $it") }
+        ArchiveCodes(stringResource(R.string.dtc_group_stored), snapshot.stored)
+        ArchiveCodes(stringResource(R.string.dtc_group_pending), snapshot.pending)
+        ArchiveCodes(stringResource(R.string.dtc_group_permanent), snapshot.permanent)
+        if (snapshot.modules.isNotEmpty()) {
+            Text(
+                stringResource(R.string.archive_modules),
+                color = TextMuted,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+            snapshot.modules.forEach { module ->
+                // Расшифровка берётся из каталога, а он работает без машины -
+                // в этом и смысл архива.
+                ArchiveCodeRow("${module.hex}: ${module.code}", module.code.substringBefore('-'))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveCodes(title: String, codes: List<String>) {
+    if (codes.isEmpty()) return
+    Text(
+        title,
+        color = TextMuted,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(top = 6.dp)
+    )
+    codes.forEach { ArchiveCodeRow(it, it) }
+}
+
+@Composable
+private fun ArchiveCodeRow(label: String, code: String) {
+    Column(Modifier.padding(top = 4.dp)) {
+        Text(label, color = TextBright, style = MaterialTheme.typography.titleSmall)
+        Text(Dtc(code).description, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Дата чтения человеческим текстом - по ней его и будут искать. */
+private fun archiveDate(millis: Long): String =
+    Instant.ofEpochMilli(millis)
+        .atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
 
 @Composable
 private fun OwnDescriptionDialog(
