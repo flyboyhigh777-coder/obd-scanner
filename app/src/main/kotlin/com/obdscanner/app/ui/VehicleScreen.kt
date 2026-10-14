@@ -332,7 +332,7 @@ private fun ProfileEditor(viewModel: ObdViewModel) {
 
 /** Поле ввода числа, которое не даёт ввести мусор и не теряет ввод на каждом знаке. */
 @Composable
-internal fun NumberField(
+private fun NumberField(
     label: String,
     value: Double,
     decimals: Int,

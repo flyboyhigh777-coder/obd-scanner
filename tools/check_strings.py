@@ -9,6 +9,7 @@ Google Maven), а aapt придирчив к мелочам, которых не
 
 Что проверяется:
   * XML разбирается;
+  * имена не повторяются внутри файла;
   * наборы ключей в русском и английском файлах совпадают;
   * апострофы и кавычки внутри строк экранированы (требование aapt);
   * нет настоящих переводов строк внутри строки - только литеральные \\n;
@@ -49,10 +50,18 @@ def check(path: str) -> list[str]:
     except ET.ParseError as exc:
         return [f"{path}: XML не разбирается: {exc}"]
 
+    seen: set[str] = set()
     for node in root.iter("string"):
         name = node.get("name")
         text = node.text or ""
         where = f"{path}: {name}"
+
+        # Повтор имени aapt не прощает ("Found item ... more than one time"), а
+        # глазами он не виден: строки лежат в разных местах файла. Один такой
+        # повтор уже стоил прогона CI.
+        if name in seen:
+            problems.append(f"{where}: имя повторяется в этом же файле")
+        seen.add(name)
 
         if unescaped(text, "'"):
             problems.append(f"{where}: апостроф без экранирования, нужен \\'")

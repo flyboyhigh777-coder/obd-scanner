@@ -276,9 +276,7 @@
     <string name="battery_min">Session minimum</string>
     <string name="battery_max">Session maximum</string>
     <string name="battery_reset">Reset minimum and maximum</string>
-    <string name="battery_calibration_title">Voltage correction</string>
-    <string name="battery_calibration_hint">The adapter measures at its own connector, not at the terminals, and cheap ones are off by up to half a volt - the same gap that separates \"not charging\" from \"fine\". Measure at the terminals with the engine running, subtract what the app shows, and enter the difference here once.</string>
-    <string name="battery_calibration">Correction, V</string>
+    <string name="battery_check_with_multimeter">Before chasing a fault: the adapter measures at its own connector, not at the terminals, and reads low. Measure at the terminals with the engine running - if it is 13.8-14.4 V the alternator is fine, and the difference goes into Voltage correction below.</string>
     <string name="battery_crank_title">Cranking test</string>
     <string name="battery_crank_hint">Press this, then turn the key. The app switches to fast voltage-only polling and catches the dip — the normal poll misses it, cranking lasts under a second. This is the main battery health test: below 9.6 V the battery is weak or the terminals are corroded.</string>
     <string name="battery_crank_start">Start cranking test</string>
