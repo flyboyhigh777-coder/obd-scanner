@@ -82,8 +82,12 @@ class TeyesCc3LayoutTest {
         // Расход - то, ради чего эта панель и появилась на видном месте.
         // Подпись зависит от того, едет машина или стоит, поэтому проверяем,
         // что есть хоть одна из двух.
-        val moving = compose.onAllNodesWithText("Расход в движении").fetchSemanticsNodes().size
-        val idle = compose.onAllNodesWithText("Расход на холостых").fetchSemanticsNodes().size
+        // substring: к подписи может добавиться пометка "(расчётный)", если
+        // машина не отдаёт расход напрямую.
+        val moving = compose.onAllNodesWithText("Расход в движении", substring = true)
+            .fetchSemanticsNodes().size
+        val idle = compose.onAllNodesWithText("Расход на холостых", substring = true)
+            .fetchSemanticsNodes().size
         assertTrue("панель расхода на экране", moving + idle > 0)
         shot("31_teyes_dashboard")
 

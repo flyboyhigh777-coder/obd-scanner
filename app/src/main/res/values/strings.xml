@@ -57,6 +57,11 @@
     <string name="dash_dtc_count">Счётчик кодов в ЭБУ: %1$d</string>
     <string name="dash_choose">Выбрать параметры</string>
     <string name="dash_choose_title">Что показывать на приборах</string>
+    <string name="dash_choose_computed">Расчётные плитки</string>
+    <string name="dash_choose_from_car">Параметры из машины</string>
+    <string name="dash_gear_tile_hint">Передачи в OBD-II нет — приложение считает её из оборотов и скорости. На механике это работает даже лучше, чем на автомате, но нужно проехать: пока машина стоит, считать не из чего.</string>
+    <string name="dash_range_tile_hint">Остаток в баке, делённый на расход.</string>
+    <string name="dash_range_impossible">Эта машина не отдаёт уровень топлива — запас хода посчитать не из чего, и плитки не будет.</string>
     <string name="dash_choose_show_all">Показать все %1$d параметров (машина заявила %2$d)</string>
     <string name="dash_choose_unlisted">машина про него не сообщала — может не ответить</string>
     <string name="dash_choose_hint">В списке только то, что отдаёт эта машина. Остальные параметры стандарта она не поддерживает.</string>
@@ -284,6 +289,9 @@
     <string name="battery_min">Минимум за сессию</string>
     <string name="battery_max">Максимум за сессию</string>
     <string name="battery_reset">Сбросить минимум и максимум</string>
+    <string name="battery_calibration_title">Поправка к напряжению</string>
+    <string name="battery_calibration_hint">Адаптер меряет напряжение на своём разъёме, а не на клеммах, и дешёвые экземпляры врут до полувольта. Между «генератор не заряжает» и «всё в порядке» разница как раз такая. Померьте мультиметром на клеммах при работающем двигателе, вычтите показание приложения и впишите разницу сюда — один раз.</string>
+    <string name="battery_calibration">Поправка, В</string>
     <string name="battery_crank_title">Тест пуска</string>
     <string name="battery_crank_hint">Нажмите, потом поворачивайте ключ. Приложение перейдёт на частый опрос только напряжения и поймает просадку — обычный опрос её проскакивает, прокрутка длится меньше секунды. Это главный тест здоровья АКБ: ниже 9,6 В — батарея слаба или окислены клеммы.</string>
     <string name="battery_crank_start">Начать тест пуска</string>

@@ -318,6 +318,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private val _volumetricEfficiency = MutableStateFlow(settings.volumetricEfficiencyPercent)
     val volumetricEfficiency: StateFlow<Float> = _volumetricEfficiency.asStateFlow()
 
+    private val _showGearTile = MutableStateFlow(settings.showGearTile)
+    val showGearTile: StateFlow<Boolean> = _showGearTile.asStateFlow()
+
+    private val _showRangeTile = MutableStateFlow(settings.showRangeTile)
+    val showRangeTile: StateFlow<Boolean> = _showRangeTile.asStateFlow()
+
     private val _profile = MutableStateFlow(settings.vehicleProfile())
     val profile: StateFlow<VehicleProfile> = _profile.asStateFlow()
 
@@ -540,6 +546,17 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     fun setPollInterval(millis: Int) {
         settings.pollIntervalMillis = millis
         _pollInterval.value = settings.pollIntervalMillis
+    }
+
+    /** Плитка передачи: считается из оборотов и скорости, нужна не всем. */
+    fun setShowGearTile(show: Boolean) {
+        settings.showGearTile = show
+        _showGearTile.value = show
+    }
+
+    fun setShowRangeTile(show: Boolean) {
+        settings.showRangeTile = show
+        _showRangeTile.value = show
     }
 
     /** Коэффициент наполнения, проценты - подгонка расчёта расхода под мотор. */

@@ -68,6 +68,8 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     val style by viewModel.gaugeStyle.collectAsState()
     val profile by viewModel.profile.collectAsState()
     val performance by viewModel.performance.collectAsState()
+    val showGear by viewModel.showGearTile.collectAsState()
+    val showRange by viewModel.showRangeTile.collectAsState()
     var chooser by remember { mutableStateOf(false) }
     // Показывать ли параметры, о которых машина не сообщала.
     var showAll by remember { mutableStateOf(false) }
@@ -138,20 +140,32 @@ fun DashboardScreen(viewModel: ObdViewModel) {
         FuelPanel(viewModel, live, units)
 
         // Передача и запас хода - то, чего нет ни в одном PID, но что
-        // считается из них и профиля машины.
-        Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
-            ValueTile(
-                stringResource(R.string.dash_gear),
-                live.gear?.toString() ?: dash,
-                Modifier.weight(1f)
-            )
-            ValueTile(
-                stringResource(R.string.dash_range),
-                live.rangeKm?.let { Format.value(it, ObdUnit.KM, 0, units) } ?: dash,
-                Modifier.weight(1f)
-            )
+        // считается из них и профиля машины. Запас хода без датчика уровня
+        // топлива не посчитать никогда, и вечный прочерк в плитке только
+        // занимает место: если машина уровень не отдаёт, плитки просто нет.
+        val canRange = supported.any { it.id == Pids.FUEL_LEVEL.id }
+        val gearTile = showGear
+        val rangeTile = showRange && canRange
+        if (gearTile || rangeTile) {
+            Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
+                if (gearTile) {
+                    ValueTile(
+                        stringResource(R.string.dash_gear),
+                        live.gear?.toString() ?: dash,
+                        Modifier.weight(1f)
+                    )
+                }
+                if (rangeTile) {
+                    ValueTile(
+                        stringResource(R.string.dash_range),
+                        live.rangeKm?.let { Format.value(it, ObdUnit.KM, 0, units) } ?: dash,
+                        Modifier.weight(1f)
+                    )
+                }
+                if (gearTile != rangeTile) Box(Modifier.weight(1f))
+            }
         }
-        if (performance.learnedGears in 1..7 && live.gear == null) {
+        if (gearTile && performance.learnedGears in 1..7 && live.gear == null) {
             Hint(stringResource(R.string.dash_gear_learning, performance.learnedGears))
         }
 
@@ -225,6 +239,55 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Hint(stringResource(R.string.dash_choose_hint), Modifier.padding(bottom = 6.dp))
+
+                    // Расчётные плитки стоят отдельно: это не параметры из
+                    // машины, а арифметика поверх них, и выключаются они сами
+                    // по себе.
+                    Text(
+                        stringResource(R.string.dash_choose_computed),
+                        color = TextBright,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = showGear, onCheckedChange = viewModel::setShowGearTile)
+                        Column {
+                            Text(
+                                stringResource(R.string.dash_gear),
+                                color = TextBright,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Hint(stringResource(R.string.dash_gear_tile_hint))
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = showRange,
+                            onCheckedChange = viewModel::setShowRangeTile,
+                            enabled = supported.any { it.id == Pids.FUEL_LEVEL.id }
+                        )
+                        Column {
+                            Text(
+                                stringResource(R.string.dash_range),
+                                color = TextBright,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Hint(
+                                stringResource(
+                                    if (supported.any { it.id == Pids.FUEL_LEVEL.id }) {
+                                        R.string.dash_range_tile_hint
+                                    } else {
+                                        R.string.dash_range_impossible
+                                    }
+                                )
+                            )
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.dash_choose_from_car),
+                        color = TextBright,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
                     // Список короткий не потому, что приложение мало умеет, а
                     // потому что машина сама сообщила только эти параметры.
                     // Но блоки бывают скромные: заявляют меньше, чем отдают, -

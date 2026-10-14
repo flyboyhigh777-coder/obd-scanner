@@ -54,6 +54,11 @@
     <string name="dash_dtc_count">ECU code counter: %1$d</string>
     <string name="dash_choose">Choose parameters</string>
     <string name="dash_choose_title">What to show on the gauges</string>
+    <string name="dash_choose_computed">Calculated tiles</string>
+    <string name="dash_choose_from_car">Parameters from the car</string>
+    <string name="dash_gear_tile_hint">OBD-II has no gear parameter - the app works it out from rpm and speed. On a manual that works even better than on an automatic, but the car has to be moving: standing still there is nothing to compute from.</string>
+    <string name="dash_range_tile_hint">Fuel left in the tank divided by consumption.</string>
+    <string name="dash_range_impossible">This car does not report the fuel level, so there is nothing to compute the range from and the tile is hidden.</string>
     <string name="dash_choose_show_all">Show all %1$d parameters (the car listed %2$d)</string>
     <string name="dash_choose_unlisted">not listed by the car - may not answer</string>
     <string name="dash_choose_hint">The list holds only what this car reports. The remaining standard parameters are not supported by it.</string>
@@ -271,6 +276,9 @@
     <string name="battery_min">Session minimum</string>
     <string name="battery_max">Session maximum</string>
     <string name="battery_reset">Reset minimum and maximum</string>
+    <string name="battery_calibration_title">Voltage correction</string>
+    <string name="battery_calibration_hint">The adapter measures at its own connector, not at the terminals, and cheap ones are off by up to half a volt - the same gap that separates \"not charging\" from \"fine\". Measure at the terminals with the engine running, subtract what the app shows, and enter the difference here once.</string>
+    <string name="battery_calibration">Correction, V</string>
     <string name="battery_crank_title">Cranking test</string>
     <string name="battery_crank_hint">Press this, then turn the key. The app switches to fast voltage-only polling and catches the dip — the normal poll misses it, cranking lasts under a second. This is the main battery health test: below 9.6 V the battery is weak or the terminals are corroded.</string>
     <string name="battery_crank_start">Start cranking test</string>

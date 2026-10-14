@@ -95,6 +95,20 @@ fun BatterySection(viewModel: ObdViewModel) {
         }
     }
 
+    // Поправка к показаниям адаптера. Без неё спорить с цифрой бессмысленно:
+    // дешёвый ELM327 легко врёт на полвольта, а между "генератор не заряжает"
+    // и "всё в порядке" разница как раз в эту сторону.
+    Panel {
+        PanelTitle(stringResource(R.string.battery_calibration_title))
+        Hint(stringResource(R.string.battery_calibration_hint))
+        NumberField(
+            label = stringResource(R.string.battery_calibration),
+            value = viewModel.voltageCalibration,
+            decimals = 2,
+            modifier = Modifier.fillMaxWidth()
+        ) { viewModel.updateVoltageOffset(it) }
+    }
+
     Panel {
         PanelTitle(stringResource(R.string.battery_crank_title))
         Hint(stringResource(R.string.battery_crank_hint))

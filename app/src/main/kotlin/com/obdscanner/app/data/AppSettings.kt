@@ -24,6 +24,19 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putInt(KEY_POLL, value.coerceIn(MIN_POLL, MAX_POLL)).apply()
 
     /**
+     * Показывать ли плитку передачи. Передача не приходит из машины, а
+     * считается из оборотов и скорости, и кому-то она не нужна вовсе.
+     */
+    var showGearTile: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_GEAR, true)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_GEAR, value).apply()
+
+    /** Показывать ли запас хода - он считается из уровня топлива и расхода. */
+    var showRangeTile: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_RANGE, true)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_RANGE, value).apply()
+
+    /**
      * Коэффициент наполнения цилиндров, проценты.
      *
      * Нужен только машинам без расходомера: там расход считается из давления
@@ -209,6 +222,8 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putString(KEY_DASH, value.joinToString(",")).apply()
 
     private companion object {
+        const val KEY_SHOW_GEAR = "show_gear"
+        const val KEY_SHOW_RANGE = "show_range"
         const val KEY_VOLUMETRIC = "volumetric_efficiency"
         const val KEY_TEXT_SCALE = "text_scale"
         const val KEY_POLL = "poll_interval"
