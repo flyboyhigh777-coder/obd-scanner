@@ -279,11 +279,17 @@ class QuickCheck(
         if (shouldStop()) return report.copy(skipped = skipped)
 
         onStep(QuickCheckStep.FREEZE_FRAME)
-        val freezePids = FREEZE_FRAME_PIDS.mapNotNull { Pids.byId[it] }.filter { session.supports(it.id) }
-        report = report.copy(
-            freezeFrameDtc = session.readFreezeFrameDtc(),
-            freezeFrame = session.readFreezeFrame(freezePids)
-        )
+        // Стоп-кадр есть только там, где есть сохранённая ошибка: он и
+        // записывается вместе с ней. На чистой машине это дюжина запросов, на
+        // каждый из которых блок ответит "нет данных", - полминуты впустую.
+        val hasStored = report.stored.isNotEmpty() || (status?.dtcCount ?: 0) > 0
+        if (hasStored) {
+            val freezePids = FREEZE_FRAME_PIDS.mapNotNull { Pids.byId[it] }.filter { session.supports(it.id) }
+            report = report.copy(
+                freezeFrameDtc = session.readFreezeFrameDtc(),
+                freezeFrame = session.readFreezeFrame(freezePids)
+            )
+        }
         if (shouldStop()) return report.copy(skipped = skipped)
 
         if (withMonitorTests) {

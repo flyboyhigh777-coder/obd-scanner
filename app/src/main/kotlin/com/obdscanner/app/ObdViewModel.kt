@@ -1546,9 +1546,14 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             emptyList()
         }
-        val performance = session.readInUsePerformance(
-            compressionIgnition = _live.value.monitor?.compressionIgnition == true
-        )
+        // Тип двигателя важен: у бензина и дизеля счётчики наработки лежат в
+        // разных PID и означают разные тесты. Обычно он уже известен из опроса
+        // приборов, но если на эту вкладку зашли сразу после подключения -
+        // спрашиваем сами, вместо того чтобы молча считать машину бензиновой.
+        val compression = _live.value.monitor?.compressionIgnition
+            ?: session.readMonitorStatus()?.compressionIgnition
+            ?: false
+        val performance = session.readInUsePerformance(compressionIgnition = compression)
         val app = getApplication<Application>()
         _tests.value = TestsState(
             running = false,
