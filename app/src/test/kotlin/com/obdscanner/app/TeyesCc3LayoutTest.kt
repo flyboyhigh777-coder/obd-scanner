@@ -4,6 +4,7 @@ import android.os.Looper
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -91,7 +92,10 @@ class TeyesCc3LayoutTest {
         assertTrue("панель расхода на экране", moving + idle > 0)
         shot("31_teyes_dashboard")
 
-        compose.onAllNodesWithText("Ошибки").onLast().performClick()
+        // Ошибки лежат внутри меню диагностики: сначала вкладка, потом пункт.
+        compose.onAllNodesWithText("Проверка").onLast().performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Ошибки").onFirst().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Считать ошибки").performClick()
         pumpUntil(30_000, "чтение кодов") { vm.dtc.value.loaded }

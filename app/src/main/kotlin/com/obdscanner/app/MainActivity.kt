@@ -40,9 +40,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.ConnectScreen
 import com.obdscanner.app.ui.DashboardScreen
-import com.obdscanner.app.ui.DtcScreen
+import com.obdscanner.app.ui.DiagnosticsScreen
 import com.obdscanner.app.ui.MeasureScreen
-import com.obdscanner.app.ui.TestsScreen
 import com.obdscanner.app.ui.VehicleScreen
 import com.obdscanner.app.ui.theme.Carbon
 import com.obdscanner.app.ui.theme.CarbonDeep
@@ -54,8 +53,8 @@ import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 
 /**
- * Единственная Activity. Шесть вкладок: связь, приборы, замеры, ошибки,
- * бортовые тесты и данные автомобиля. У всех общий [ObdViewModel] - связь с машиной одна, и
+ * Единственная Activity. Пять вкладок: связь, приборы, диагностика, замеры и
+ * данные автомобиля; разделы диагностики - меню внутри своей вкладки. У всех общий [ObdViewModel] - связь с машиной одна, и
  * переключение вкладок не должно её рвать, а замеры разгона не должны
  * обнуляться от того, что человек заглянул в ошибки.
  *
@@ -99,9 +98,8 @@ class MainActivity : ComponentActivity() {
                                 when (tab) {
                                     0 -> ConnectScreen(viewModel)
                                     1 -> DashboardScreen(viewModel)
-                                    2 -> MeasureScreen(viewModel)
-                                    3 -> DtcScreen(viewModel)
-                                    4 -> TestsScreen(viewModel)
+                                    2 -> DiagnosticsScreen(viewModel)
+                                    3 -> MeasureScreen(viewModel)
                                     else -> VehicleScreen(viewModel)
                                 }
                             }
@@ -124,13 +122,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Шесть вкладок одним списком: порядок и подписи у полосы и у рейки общие. */
+/**
+ * Пять вкладок одним списком: порядок и подписи у полосы и у рейки общие.
+ *
+ * Разделов диагностики шесть, и вкладкой каждый не сделать - на телефоне 360 dp
+ * подписи начинают обрезаться уже на шестой. Поэтому они собраны под одной
+ * вкладкой "Проверка", которая показывает их меню с состоянием каждого
+ * раздела: сколько кодов, завершены ли тесты, есть ли тест вне пределов.
+ *
+ * Подпись у вкладки короткая, а заголовок внутри полный ("Диагностика"):
+ * одиннадцать букв в пятой вкладке на телефоне 360 dp переносятся на вторую
+ * строку и обрезаются.
+ */
 private val TABS = listOf(
     R.string.tab_connect,
     R.string.tab_dashboard,
+    R.string.tab_diag,
     R.string.tab_measure,
-    R.string.tab_dtc,
-    R.string.tab_tests,
     R.string.tab_vehicle,
 )
 
@@ -139,9 +147,8 @@ private fun TabIcon(index: Int) {
     when (index) {
         0 -> PlugIcon()
         1 -> GaugeIcon()
-        2 -> RouteIcon()
-        3 -> WarningIcon()
-        4 -> CheckIcon()
+        2 -> WarningIcon()
+        3 -> RouteIcon()
         else -> CarIcon()
     }
 }
@@ -268,28 +275,6 @@ private fun WarningIcon() {
         drawPath(triangle, color, style = Stroke(stroke))
         drawLine(color, Offset(w / 2, h * 0.40f), Offset(w / 2, h * 0.62f), strokeWidth = stroke)
         drawCircle(color, radius = 1.2.dp.toPx(), center = Offset(w / 2, h * 0.72f))
-    }
-}
-
-/**
- * Галочка в рамке - бортовые тесты.
- *
- * Именно галочка, а не лупа: на этой вкладке не ищут, а смотрят результат
- * проверки, которую машина делает сама.
- */
-@Composable
-private fun CheckIcon() {
-    val color = LocalContentColor.current
-    Canvas(Modifier.size(24.dp)) {
-        val w = size.width; val h = size.height
-        val stroke = 2.dp.toPx()
-        val frame = Path().apply {
-            moveTo(w * 0.14f, h * 0.18f); lineTo(w * 0.86f, h * 0.18f)
-            lineTo(w * 0.86f, h * 0.82f); lineTo(w * 0.14f, h * 0.82f); close()
-        }
-        drawPath(frame, color, style = Stroke(stroke))
-        drawLine(color, Offset(w * 0.30f, h * 0.52f), Offset(w * 0.45f, h * 0.66f), strokeWidth = stroke)
-        drawLine(color, Offset(w * 0.45f, h * 0.66f), Offset(w * 0.72f, h * 0.34f), strokeWidth = stroke)
     }
 }
 

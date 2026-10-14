@@ -1,16 +1,13 @@
 package com.obdscanner.app.ui
 
 import android.content.Intent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -25,85 +22,61 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
 import com.obdscanner.app.data.ReportExport
+import com.obdscanner.app.ui.theme.CirclePlum
+import com.obdscanner.app.ui.theme.CircleSlate
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GaugeRed
-import com.obdscanner.app.ui.theme.GradientTopBar
 import com.obdscanner.app.ui.theme.Hint
 import com.obdscanner.app.ui.theme.InfoRow
+import com.obdscanner.app.ui.theme.MeasureRow
 import com.obdscanner.app.ui.theme.Panel
-import com.obdscanner.app.ui.theme.PanelBorder
 import com.obdscanner.app.ui.theme.PanelTitle
-import com.obdscanner.app.ui.theme.SegmentButton
+import com.obdscanner.app.ui.theme.RowGlyph
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
+import com.obdscanner.app.ui.theme.ValueRow
 import com.obdscanner.core.monitor.MonitorTest
 
 /**
- * Вкладка "Тесты" - то, что ЭБУ проверяет сам.
+ * Разделы бортовых самодиагностик - то, что ЭБУ проверяет сам.
  *
- * Разница с вкладкой "Ошибки" принципиальная и стоит того, чтобы её развести по
- * экранам: там записанные неисправности, то есть прошлое, а здесь результаты
- * самодиагностик с их пределами - то есть насколько близко узел подошёл к
- * порогу, за которым ошибка появится. Катализатор, который "пока проходит", и
- * лямбда-зонд, который начал залениваться, видно только здесь.
+ * Открываются из меню "Диагностика", а не вкладкой: вкладка одинаковая всегда,
+ * а в меню у каждого раздела видно состояние ещё до того, как в него зашли.
  *
- * Сюда же вынесена полная проверка одним нажатием с отчётом: её запускают, когда
- * машину смотрят целиком - перед покупкой, перед техосмотром, после ремонта.
+ * Разница с разделом "Ошибки" принципиальная: там записанные неисправности, то
+ * есть прошлое, а здесь результаты самодиагностик с их пределами - то есть
+ * насколько близко узел подошёл к порогу, за которым ошибка появится.
  */
 @Composable
-fun TestsScreen(viewModel: ObdViewModel) {
-    var section by rememberSaveable { mutableStateOf(0) }
+private fun TestPage(viewModel: ObdViewModel, content: @Composable ColumnScope.(Boolean) -> Unit) {
     val connection by viewModel.connection.collectAsState()
     val connected = connection is ConnectionState.Connected
-
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
+            .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        GradientTopBar(stringResource(R.string.tests_title), stringResource(R.string.tests_subtitle))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegmentButton(stringResource(R.string.tests_tab_quick), section == 0, Modifier.weight(1f)) {
-                section = 0
-            }
-            SegmentButton(stringResource(R.string.tests_tab_monitors), section == 1, Modifier.weight(1f)) {
-                section = 1
-            }
-            SegmentButton(stringResource(R.string.tests_tab_counters), section == 2, Modifier.weight(1f)) {
-                section = 2
-            }
-        }
-
         if (!connected) {
             Panel { Hint(stringResource(R.string.tests_not_connected)) }
         }
-
-        when (section) {
-            0 -> QuickCheckSection(viewModel, connected)
-            1 -> MonitorTestsSection(viewModel, connected)
-            else -> CountersSection(viewModel, connected)
-        }
+        content(connected)
     }
 }
 
 /** Полная проверка и отчёт. */
 @Composable
-private fun QuickCheckSection(viewModel: ObdViewModel, connected: Boolean) {
+fun QuickCheckPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
     val state by viewModel.quickCheck.collectAsState()
     val withMonitorTests by viewModel.quickCheckMonitorTests.collectAsState()
     val context = LocalContext.current
@@ -124,10 +97,7 @@ private fun QuickCheckSection(viewModel: ObdViewModel, connected: Boolean) {
         Hint(stringResource(R.string.tests_quick_mode06_hint))
 
         if (state.running) {
-            Text(
-                stringResource(R.string.tests_quick_step, state.step?.title.orEmpty()),
-                color = GaugeAmber
-            )
+            Text(stringResource(R.string.tests_quick_step, state.step?.title.orEmpty()), color = GaugeAmber)
             OutlinedButton(onClick = { viewModel.stopQuickCheck() }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.tests_stop), color = TextBright)
             }
@@ -138,22 +108,21 @@ private fun QuickCheckSection(viewModel: ObdViewModel, connected: Boolean) {
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.tests_quick_run)) }
         }
+    }
 
-        val report = state.report
-        if (report != null) {
-            InfoRow(
-                stringResource(R.string.tests_quick_verdict),
+    val report = state.report
+    if (report != null) {
+        Panel {
+            PanelTitle(stringResource(R.string.tests_quick_verdict))
+            Text(
                 report.verdict,
-                if (report.dtcTotal > 0 || report.failedTests.isNotEmpty()) GaugeRed else GaugeGreen
+                style = MaterialTheme.typography.titleSmall,
+                color = if (report.dtcTotal > 0 || report.failedTests.isNotEmpty()) GaugeRed else GaugeGreen
             )
-            InfoRow(stringResource(R.string.tests_quick_codes), report.dtcTotal.toString())
-            InfoRow(
+            ValueRow(stringResource(R.string.tests_quick_codes), report.dtcTotal.toString())
+            ValueRow(
                 stringResource(R.string.tests_quick_failed),
-                stringResource(
-                    R.string.tests_failed_count,
-                    report.failedTests.size,
-                    report.monitorTests.size
-                )
+                stringResource(R.string.tests_failed_count, report.failedTests.size, report.monitorTests.size)
             )
             report.skipped.forEach { Hint(it) }
 
@@ -190,8 +159,12 @@ private fun QuickCheckSection(viewModel: ObdViewModel, connected: Boolean) {
                 ) { Text(stringResource(R.string.tests_quick_share), color = TextBright) }
             }
             message?.let { Hint(it) }
+        }
 
-            // Сам отчёт целиком - его и читают, и копируют в переписку.
+        Panel {
+            PanelTitle(stringResource(R.string.tests_quick_report))
+            // Отчёт целиком - его и читают, и копируют в переписку. Шрифт
+            // равноширинный: в нём колонки отчёта стоят колонками.
             Text(
                 report.toText(),
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -201,30 +174,16 @@ private fun QuickCheckSection(viewModel: ObdViewModel, connected: Boolean) {
     }
 }
 
-/** Режим 06: результаты с пределами, и режим 05 там, где он есть. */
+/** Режим 06: результаты с пределами. */
 @Composable
-private fun MonitorTestsSection(viewModel: ObdViewModel, connected: Boolean) {
+fun MonitorTestsPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
     val state by viewModel.tests.collectAsState()
 
     Panel {
         PanelTitle(stringResource(R.string.tests_monitor_title))
         Hint(stringResource(R.string.tests_monitor_hint))
-
-        if (state.running) {
-            OutlinedButton(onClick = { viewModel.stopTests() }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.tests_stop), color = TextBright)
-            }
-            Text(stringResource(R.string.tests_reading), color = GaugeAmber)
-        } else {
-            Button(
-                onClick = { viewModel.readTests() },
-                enabled = connected,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(stringResource(R.string.tests_read)) }
-        }
-
+        ReadButton(viewModel, state.running, connected)
         state.message?.let { Hint(it) }
-
         if (state.monitorTests.isNotEmpty()) {
             InfoRow(
                 stringResource(R.string.tests_quick_failed),
@@ -242,82 +201,43 @@ private fun MonitorTestsSection(viewModel: ObdViewModel, connected: Boolean) {
             tests.forEach { MonitorTestRow(it) }
         }
     }
+}
 
-    if (state.o2Locations.any { it.present } || state.o2Tests.isNotEmpty()) {
+/** Лямбда-зонды: расположение и тесты режима 05 там, где он есть. */
+@Composable
+fun O2SensorsPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
+    val state by viewModel.tests.collectAsState()
+
+    Panel {
+        PanelTitle(stringResource(R.string.tests_o2_title))
+        Hint(stringResource(R.string.tests_o2_hint))
+        ReadButton(viewModel, state.running, connected)
+    }
+
+    if (state.o2Locations.any { it.present }) {
         Panel {
-            PanelTitle(stringResource(R.string.tests_o2_title))
-            Hint(stringResource(R.string.tests_o2_hint))
+            PanelTitle(stringResource(R.string.tests_o2_present_title))
             state.o2Locations.filter { it.present }.forEach { location ->
-                InfoRow(location.title, stringResource(R.string.tests_o2_present))
+                InfoRow(location.title, stringResource(R.string.tests_o2_present), GaugeGreen)
             }
-            if (state.o2Tests.isEmpty()) {
-                Hint(stringResource(R.string.tests_o2_mode05_can))
-            } else {
-                state.o2Tests.forEach { test ->
-                    InfoRow("${test.sensorTitle}: ${test.title}", test.format())
-                }
+        }
+    }
+
+    Panel {
+        PanelTitle(stringResource(R.string.tests_o2_mode05_title))
+        if (state.o2Tests.isEmpty()) {
+            Hint(stringResource(R.string.tests_o2_mode05_can))
+        } else {
+            state.o2Tests.forEach { test ->
+                ValueRow("${test.sensorTitle}: ${test.title}", test.format())
             }
         }
     }
 }
 
-/**
- * Одна строка результата: значение, пределы и полоска, показывающая, где
- * значение стоит между ними.
- *
- * Полоска здесь не украшение - она и есть ответ на вопрос "сколько осталось".
- * Число 42 при пределе 36 ничего не говорит человеку, который не знает, что
- * это за величина; полоска, упёршаяся в край, говорит.
- */
+/** Счётчики наработки бортовых тестов. */
 @Composable
-private fun MonitorTestRow(test: MonitorTest) {
-    val color = when (test.passed) {
-        true -> GaugeGreen
-        false -> GaugeRed
-        null -> TextMuted
-    }
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(test.testTitle, color = TextBright, style = MaterialTheme.typography.bodyMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(test.formatValue(), color = color, fontWeight = FontWeight.Medium)
-            Text(
-                when (test.passed) {
-                    true -> stringResource(R.string.tests_pass)
-                    false -> stringResource(R.string.tests_fail)
-                    null -> stringResource(R.string.tests_no_limits)
-                },
-                color = color,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-        val limits = listOfNotNull(
-            test.formatMin()?.let { stringResource(R.string.tests_limit_min, it) },
-            test.formatMax()?.let { stringResource(R.string.tests_limit_max, it) }
-        ).joinToString(" · ")
-        if (limits.isNotEmpty()) Hint(limits)
-        test.position?.let { position ->
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(PanelBorder)
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(position.coerceIn(0.0, 1.0).toFloat())
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (test.passed == false) GaugeRed else color.copy(alpha = 0.8f))
-                )
-            }
-        }
-    }
-}
-
-/** Счётчики наработки бортовых тестов: завершено и сколько раз были условия. */
-@Composable
-private fun CountersSection(viewModel: ObdViewModel, connected: Boolean) {
+fun CountersPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
     val state by viewModel.tests.collectAsState()
     val performance = state.performance
 
@@ -325,11 +245,7 @@ private fun CountersSection(viewModel: ObdViewModel, connected: Boolean) {
         PanelTitle(stringResource(R.string.tests_ipt_title))
         Hint(stringResource(R.string.tests_ipt_hint))
         if (performance == null) {
-            Button(
-                onClick = { viewModel.readTests() },
-                enabled = connected && !state.running,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(stringResource(R.string.tests_read)) }
+            ReadButton(viewModel, state.running, connected)
             if (state.loaded) Hint(stringResource(R.string.tests_ipt_empty))
         }
     }
@@ -338,18 +254,16 @@ private fun CountersSection(viewModel: ObdViewModel, connected: Boolean) {
         Panel {
             PanelTitle(stringResource(R.string.tests_ipt_general))
             performance.obdConditions?.let {
-                InfoRow(stringResource(R.string.tests_ipt_conditions), it.toString())
+                ValueRow(stringResource(R.string.tests_ipt_conditions), it.toString())
             }
             performance.ignitionCycles?.let {
-                InfoRow(stringResource(R.string.tests_ipt_ignitions), it.toString())
+                ValueRow(stringResource(R.string.tests_ipt_ignitions), it.toString())
             }
             Hint(stringResource(R.string.tests_ipt_ratio_hint))
         }
         Panel {
             PanelTitle(stringResource(R.string.tests_ipt_pairs))
             performance.pairs.forEach { pair ->
-                val completed = pair.completed
-                val conditions = pair.conditions
                 val ratio = pair.ratio?.times(100.0)
                 InfoRow(
                     pair.title,
@@ -358,13 +272,16 @@ private fun CountersSection(viewModel: ObdViewModel, connected: Boolean) {
                     } else {
                         stringResource(
                             R.string.tests_ipt_ratio,
-                            completed.value,
-                            conditions.value,
+                            pair.completed.value,
+                            pair.conditions.value,
                             ratio.toInt()
                         )
                     },
                     when {
                         ratio == null -> TextMuted
+                        // 0,336 - то самое отношение, ниже которого бортовая
+                        // диагностика считается неработающей по европейским
+                        // правилам. Своих чисел здесь нет и быть не может.
                         ratio < 33.6 -> GaugeAmber
                         else -> GaugeGreen
                     }
@@ -372,4 +289,66 @@ private fun CountersSection(viewModel: ObdViewModel, connected: Boolean) {
             }
         }
     }
+}
+
+/** Кнопка "прочитать" с остановкой - одна и та же во всех трёх разделах. */
+@Composable
+private fun ReadButton(viewModel: ObdViewModel, running: Boolean, connected: Boolean) {
+    if (running) {
+        OutlinedButton(onClick = { viewModel.stopTests() }, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.tests_stop), color = TextBright)
+        }
+        Text(stringResource(R.string.tests_reading), color = GaugeAmber)
+    } else {
+        Button(
+            onClick = { viewModel.readTests() },
+            enabled = connected,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.tests_read)) }
+    }
+}
+
+/**
+ * Одна строка результата: название теста, значение между пределами и вердикт.
+ *
+ * Раскладка в четыре колонки (минимум, значение, максимум, единица) - потому
+ * что смысл режима 06 не в значении, а в его расстоянии до предела: пока три
+ * числа стоят в одной строке, это видно без арифметики в голове.
+ */
+@Composable
+private fun MonitorTestRow(test: MonitorTest) {
+    val color = when (test.passed) {
+        true -> GaugeGreen
+        false -> GaugeRed
+        null -> TextMuted
+    }
+    MeasureRow(
+        title = test.testTitle,
+        description = when (test.passed) {
+            true -> stringResource(R.string.tests_pass)
+            false -> stringResource(R.string.tests_fail)
+            null -> stringResource(R.string.tests_no_limits)
+        },
+        glyph = when (test.passed) {
+            true -> RowGlyph.OK
+            false -> RowGlyph.ALERT
+            null -> RowGlyph.UNKNOWN
+        },
+        circleColor = when (test.passed) {
+            true -> GaugeGreen
+            false -> GaugeRed
+            null -> CircleSlate
+        },
+        min = test.minText(),
+        value = test.valueText(),
+        max = test.maxText(),
+        unit = test.unit,
+        valueColor = color,
+        position = test.position,
+        labels = Triple(
+            stringResource(R.string.tests_limit_min_short),
+            stringResource(R.string.tests_value_short),
+            stringResource(R.string.tests_limit_max_short)
+        )
+    )
 }

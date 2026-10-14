@@ -32,7 +32,7 @@ fun GradientTopBar(title: String, subtitle: String? = null, modifier: Modifier =
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF0F5C66), Color(0xFF1B3A8C))))
+            .background(Brush.linearGradient(listOf(HeaderStart, HeaderEnd)))
             .padding(vertical = 14.dp, horizontal = 18.dp)
     ) {
         Column {

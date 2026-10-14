@@ -6,7 +6,6 @@
 
     <string name="tab_connect">Link</string>
     <string name="tab_dashboard">Gauges</string>
-    <string name="tab_dtc">Faults</string>
     <string name="tab_vehicle">Vehicle</string>
     <string name="tab_trip">Trip</string>
 
@@ -336,12 +335,6 @@
     <string name="connect_not_batched">This adapter or ECU does not support batched requests, so parameters are read one by one and the cycle is that many times longer.</string>
 
     <!-- On-board test results: modes 05, 06 and performance counters -->
-    <string name="tab_tests">Tests</string>
-    <string name="tests_title">On-board tests</string>
-    <string name="tests_subtitle">What the ECU checks by itself</string>
-    <string name="tests_tab_quick">Check</string>
-    <string name="tests_tab_monitors">Results</string>
-    <string name="tests_tab_counters">Counters</string>
     <string name="tests_not_connected">Not connected — connect on the \"Link\" tab. Demo mode works too: the virtual vehicle answers these services exactly like a real one.</string>
     <string name="tests_quick_title">Full check</string>
     <string name="tests_quick_hint">Reads everything that can be read and puts it into one report: protocol and adapter, VIN, calibration ID and its verification number, MIL and trouble codes from all three services, monitor readiness, freeze frame, on-board test results and their performance counters. Nothing is written to the ECU. The report is saved as a text file you can hand to a garage or attach to a sale listing.</string>
@@ -410,4 +403,38 @@
     <string name="vehicle_calibration_n">Calibration ID %1$d</string>
     <string name="vehicle_cvn_n">Verification number %1$d</string>
     <string name="vehicle_cvn_hint">CALID is the calibration number the manufacturer changes with every official reflash, CVN is its checksum. A factory ID with a checksum that does not match means the firmware was modified — this is exactly how chip tuning is found at inspection. There is nothing to compare against (no open database of factory checksums exists), but the app lets you record yours now and compare after a garage visit.</string>
+    <!-- Diagnostics: section menu -->
+    <string name="tab_diag">Diagnose</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_subtitle">What the ECU recorded and what it checks itself</string>
+    <string name="diag_back">Sections</string>
+    <string name="diag_mil_unknown">The check engine light has not been read yet — connect and open \"Gauges\" or read the codes.</string>
+    <string name="diag_mil_on">Check engine light on, codes in the ECU: %1$d</string>
+    <string name="diag_mil_off">Check engine light off</string>
+    <string name="diag_readiness_ok">Monitors are complete — no questions on that part at inspection.</string>
+    <string name="diag_readiness_incomplete">Monitors not complete: %1$d. Normal after clearing codes, but too early for inspection.</string>
+    <string name="diag_codes">Trouble codes</string>
+    <string name="diag_codes_desc">Stored, pending, permanent, freeze frame</string>
+    <string name="diag_quick">Full check</string>
+    <string name="diag_quick_desc">Read everything into one report with a single tap</string>
+    <string name="diag_monitor_tests">Test results</string>
+    <string name="diag_monitor_tests_desc">How close a component is to its limit</string>
+    <string name="diag_o2">Oxygen sensors</string>
+    <string name="diag_o2_desc">Where they are and what their tests say</string>
+    <string name="diag_counters">In-use performance</string>
+    <string name="diag_counters_desc">How many times a monitor actually ran</string>
+    <string name="diag_state_clean">clean</string>
+    <string name="diag_state_codes">codes: %1$d</string>
+    <string name="diag_state_ready">report ready</string>
+    <string name="diag_state_none">no data</string>
+    <string name="diag_state_all_ok">all within limits</string>
+    <string name="diag_state_failed">out of limits: %1$d</string>
+    <string name="diag_state_sensors">sensors: %1$d</string>
+    <string name="diag_state_cycles">cycles: %1$d</string>
+    <string name="tests_quick_report">Report</string>
+    <string name="tests_o2_present_title">Sensors present</string>
+    <string name="tests_o2_mode05_title">Sensor tests (mode 05)</string>
+    <string name="tests_limit_min_short">min</string>
+    <string name="tests_limit_max_short">max</string>
+    <string name="tests_value_short">value</string>
 </resources>

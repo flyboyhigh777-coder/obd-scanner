@@ -4,6 +4,7 @@ import android.os.Looper
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -86,6 +87,20 @@ class ObdAppFlowTest {
         compose.waitForIdle()
     }
 
+    /**
+     * Раздел диагностики открывается из меню, а не вкладкой. Сначала меню (если
+     * мы уже внутри раздела - выходим в него), потом пункт по названию.
+     */
+    private fun openDiagSection(title: String) {
+        openTab("Проверка")
+        if (compose.onAllNodesWithText("К разделам").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("К разделам").performClick()
+            compose.waitForIdle()
+        }
+        compose.onAllNodesWithText(title).onFirst().performScrollTo().performClick()
+        compose.waitForIdle()
+    }
+
     @Test
     fun demoDriveThroughEveryScreen() {
         val vm = ViewModelProvider(compose.activity)[ObdViewModel::class.java]
@@ -129,7 +144,7 @@ class ObdAppFlowTest {
         shot("04_dashboard")
 
         // Ошибки: читаем все три режима и стоп-кадр.
-        openTab("Ошибки")
+        openDiagSection("Ошибки")
         shot("05_dtc_empty")
         compose.onNodeWithText("Считать ошибки").performClick()
         pumpUntil(30_000, "чтение кодов ошибок") { vm.dtc.value.loaded }
@@ -279,10 +294,9 @@ class ObdAppFlowTest {
         // согласован с кодом в памяти блока: виртуальная машина отдаёт P0420
         // (эффективность катализатора) и тест катализатора вне пределов. Если
         // разбор режима 06 где-то сдвинется на байт, это рассыплется.
-        openTab("Тесты")
-        shot("19_tests_empty")
-        compose.onNodeWithText("Результаты").performClick()
-        compose.waitForIdle()
+        openTab("Проверка")
+        shot("19_diag_menu")
+        openDiagSection("Результаты тестов")
         compose.onNodeWithText("Прочитать").performScrollTo().performClick()
         pumpUntil(30_000, "чтение режима 06") { vm.tests.value.loaded && !vm.tests.value.running }
         val monitorTests = vm.tests.value.monitorTests
@@ -294,13 +308,11 @@ class ObdAppFlowTest {
         assertEquals(120, vm.tests.value.performance!!.obdConditions)
         shot("20_tests_mode06")
 
-        compose.onNodeWithText("Наработка").performClick()
-        compose.waitForIdle()
+        openDiagSection("Наработка тестов")
         shot("21_tests_counters")
 
         // Полная проверка: одно нажатие, отчёт на экране и файлом.
-        compose.onNodeWithText("Проверка").performClick()
-        compose.waitForIdle()
+        openDiagSection("Полная проверка")
         compose.onNodeWithText("Проверить всё").performScrollTo().performClick()
         pumpUntil(60_000, "полная проверка") {
             !vm.quickCheck.value.running && vm.quickCheck.value.report != null
@@ -318,6 +330,15 @@ class ObdAppFlowTest {
         compose.onNodeWithText("Сохранить отчёт").performScrollTo().performClick()
         pumpUntil(20_000, "выгрузка отчёта") { vm.quickCheck.value.exportedUri != null }
         shot("23_tests_report_saved")
+
+        // Меню диагностики не просто открывает разделы - оно показывает, есть
+        // ли в них что-то, не заходя внутрь. Ради этого оно и сделано меню, а
+        // не рядом вкладок.
+        openTab("Проверка")
+        compose.onNodeWithText("К разделам").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("вне пределов: 1").assertExists()
+        shot("24_diag_menu_with_state")
 
         // Авто: профиль машины и справочники.
         openTab("Авто")
@@ -340,7 +361,7 @@ class ObdAppFlowTest {
 
         // И главное про архив: без машины коды всё равно на экране. Ради
         // этого он и делался - разбираются с кодами дома, а не в гараже.
-        openTab("Ошибки")
+        openDiagSection("Ошибки")
         compose.waitForIdle()
         assertTrue(
             "архив виден без подключения",

@@ -94,18 +94,35 @@ data class MonitorTest(
     val testTitle: String get() = TestIds.name(tid)
 
     /** Текст значения с единицей: "0,48 В" либо "123 отсч." при неизвестном масштабе. */
-    fun formatValue(): String = format(rawValue, value)
+    fun formatValue(): String = withUnit(number(rawValue, value))
 
-    fun formatMin(): String? = rawMin?.let { format(it, min) }
+    fun formatMin(): String? = rawMin?.let { withUnit(number(it, min)) }
 
-    fun formatMax(): String? = rawMax?.let { format(it, max) }
+    fun formatMax(): String? = rawMax?.let { withUnit(number(it, max)) }
 
-    private fun format(raw: Int, scaledValue: Double?): String {
+    /**
+     * То же, но без единицы.
+     *
+     * Нужно раскладке в четыре колонки (минимум, значение, максимум, единица):
+     * там единица стоит один раз в своей колонке, а повторять её у каждого из
+     * трёх чисел - значит втрое сузить место под сами числа.
+     */
+    fun valueText(): String = number(rawValue, value)
+
+    fun minText(): String? = rawMin?.let { number(it, min) }
+
+    fun maxText(): String? = rawMax?.let { number(it, max) }
+
+    private fun number(raw: Int, scaledValue: Double?): String {
         if (UnitScalings.isBoolean(uasId)) {
             return if (raw != 0) ObdText.pick("да", "true") else ObdText.pick("нет", "false")
         }
         val s = scaling ?: return ObdText.pick("$raw отсч.", "$raw counts")
-        val text = "%.${s.decimals}f".format(scaledValue ?: 0.0)
+        return "%.${s.decimals}f".format(scaledValue ?: 0.0)
+    }
+
+    private fun withUnit(text: String): String {
+        val s = scaling ?: return text
         return if (s.unit.isEmpty()) text else "$text ${s.unit}"
     }
 

@@ -7,7 +7,6 @@
     <!-- Вкладки -->
     <string name="tab_connect">Связь</string>
     <string name="tab_dashboard">Приборы</string>
-    <string name="tab_dtc">Ошибки</string>
     <string name="tab_vehicle">Авто</string>
     <string name="tab_trip">Поездка</string>
 
@@ -349,12 +348,6 @@
     <string name="connect_not_batched">Пакетный запрос не поддержан этим адаптером или блоком — приборы спрашиваются по одному, и цикл во столько же раз длиннее.</string>
 
     <!-- Бортовые тесты: режимы 05, 06 и счётчики наработки -->
-    <string name="tab_tests">Тесты</string>
-    <string name="tests_title">Бортовые тесты</string>
-    <string name="tests_subtitle">Что блок управления проверяет сам</string>
-    <string name="tests_tab_quick">Проверка</string>
-    <string name="tests_tab_monitors">Результаты</string>
-    <string name="tests_tab_counters">Наработка</string>
     <string name="tests_not_connected">Нет связи с машиной — подключитесь на вкладке «Связь». Демо-режим тоже подойдёт: виртуальная машина отвечает на эти режимы так же, как настоящая.</string>
     <string name="tests_quick_title">Полная проверка</string>
     <string name="tests_quick_hint">Читает всё, что можно прочитать, и складывает в один отчёт: протокол и адаптер, VIN, номер и контрольную сумму калибровки, лампу и ошибки по всем трём режимам, готовность бортовых тестов, стоп-кадр, результаты самодиагностик и счётчики их наработки. Ничего не записывает в блок. Отчёт сохраняется текстовым файлом — его можно отдать в сервис или приложить к объявлению о продаже.</string>
@@ -423,4 +416,38 @@
     <string name="vehicle_calibration_n">Номер калибровки %1$d</string>
     <string name="vehicle_cvn_n">Контрольная сумма %1$d</string>
     <string name="vehicle_cvn_hint">CALID — номер калибровки, который производитель меняет при каждой официальной перепрошивке, CVN — её контрольная сумма. Заводской номер с неподходящей суммой означает, что прошивку правили: именно так чип-тюнинг и находят на техосмотре. Сравнивать не с чем — открытой базы заводских сумм нет, — но записать свои сейчас и сверить после сервиса приложение позволяет.</string>
+    <!-- Диагностика: меню разделов -->
+    <string name="tab_diag">Проверка</string>
+    <string name="diag_title">Диагностика</string>
+    <string name="diag_subtitle">Что записал блок и что он проверяет сам</string>
+    <string name="diag_back">К разделам</string>
+    <string name="diag_mil_unknown">Лампа Check Engine ещё не опрошена — подключитесь и загляните в «Приборы» или прочитайте ошибки.</string>
+    <string name="diag_mil_on">Check Engine горит, кодов в блоке: %1$d</string>
+    <string name="diag_mil_off">Check Engine не горит</string>
+    <string name="diag_readiness_ok">Бортовые тесты завершены — по этой части на техосмотре вопросов не будет.</string>
+    <string name="diag_readiness_incomplete">Бортовых тестов не завершено: %1$d. После сброса ошибок это нормально, но на техосмотр с этим рано.</string>
+    <string name="diag_codes">Ошибки</string>
+    <string name="diag_codes_desc">Сохранённые, ожидающие, постоянные, стоп-кадр</string>
+    <string name="diag_quick">Полная проверка</string>
+    <string name="diag_quick_desc">Прочитать всё и сложить в отчёт одним нажатием</string>
+    <string name="diag_monitor_tests">Результаты тестов</string>
+    <string name="diag_monitor_tests_desc">Насколько близко узел к порогу ошибки</string>
+    <string name="diag_o2">Лямбда-зонды</string>
+    <string name="diag_o2_desc">Где стоят и что показывают их тесты</string>
+    <string name="diag_counters">Наработка тестов</string>
+    <string name="diag_counters_desc">Сколько раз тест прошёл на самом деле</string>
+    <string name="diag_state_clean">чисто</string>
+    <string name="diag_state_codes">кодов: %1$d</string>
+    <string name="diag_state_ready">отчёт готов</string>
+    <string name="diag_state_none">нет данных</string>
+    <string name="diag_state_all_ok">все в пределах</string>
+    <string name="diag_state_failed">вне пределов: %1$d</string>
+    <string name="diag_state_sensors">зондов: %1$d</string>
+    <string name="diag_state_cycles">циклов: %1$d</string>
+    <string name="tests_quick_report">Отчёт</string>
+    <string name="tests_o2_present_title">Установленные зонды</string>
+    <string name="tests_o2_mode05_title">Тесты зондов (режим 05)</string>
+    <string name="tests_limit_min_short">мин</string>
+    <string name="tests_limit_max_short">макс</string>
+    <string name="tests_value_short">значение</string>
 </resources>
