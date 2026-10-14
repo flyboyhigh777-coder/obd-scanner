@@ -96,7 +96,7 @@ fun DtcScreen(viewModel: ObdViewModel) {
             // Без связи экран раньше был пуст - а именно в этот момент коды и
             // начинают разглядывать: адаптер вынут, человек сидит дома.
             Panel { Hint(stringResource(R.string.dash_offline)) }
-            ArchivePanel(viewModel)
+            ArchivePanel(viewModel, offline = true)
             return@Column
         }
 
@@ -199,7 +199,7 @@ fun DtcScreen(viewModel: ObdViewModel) {
             }
         }
 
-        ArchivePanel(viewModel)
+        ArchivePanel(viewModel, offline = false)
 
         if (dtc.stored.isNotEmpty() || dtc.pending.isNotEmpty()) {
             Button(
@@ -417,7 +417,7 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
  * становился нужен.
  */
 @Composable
-private fun ArchivePanel(viewModel: ObdViewModel) {
+private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
     val archive by viewModel.archive.collectAsState()
     val context = LocalContext.current
 
@@ -429,7 +429,11 @@ private fun ArchivePanel(viewModel: ObdViewModel) {
         }
         Hint(stringResource(R.string.archive_hint))
         archive.forEachIndexed { index, snapshot ->
-            ArchiveEntry(snapshot, expandedByDefault = index == 0) {
+            // Пока машина на связи, свежая запись - это ровно то, что уже
+            // показано живым списком выше; разворачивать её значит показать
+            // одно и то же дважды. Без связи наоборот: разворачиваем, ради
+            // этого архив и делался.
+            ArchiveEntry(snapshot, expandedByDefault = offline && index == 0) {
                 val text = DtcArchive.asText(snapshot, archiveDate(snapshot.timeMillis))
                 context.startActivity(
                     Intent.createChooser(
