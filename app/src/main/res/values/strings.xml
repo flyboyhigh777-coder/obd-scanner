@@ -69,6 +69,7 @@
     <string name="dash_consumption_idle">Расход на холостых</string>
     <string name="dash_consumption_estimated_mark"> (расчётный)</string>
     <string name="dash_consumption_estimated_hint">У этого мотора нет ни расходомера, ни готового расхода в OBD-II — приложение считает его из давления во впуске, оборотов и температуры. Это оценка: сверьте с заправкой и подкрутите «Коэффициент наполнения» на вкладке «Авто».</string>
+    <string name="dash_consumption_needs">Расход посчитать нечем: машина не отдала %1$s. Приложение берёт готовый расход, расходомер или давление во впуске — если нет ничего из этого, расход показать неоткуда.</string>
     <string name="dash_no_answer">не отвечает</string>
     <string name="dash_consumption_average">Средний за поездку</string>
     <string name="dash_fuel_used">Израсходовано</string>

@@ -66,6 +66,7 @@
     <string name="dash_consumption_idle">Consumption at idle</string>
     <string name="dash_consumption_estimated_mark"> (calculated)</string>
     <string name="dash_consumption_estimated_hint">This engine has neither an air-flow meter nor a ready fuel-rate PID, so the app works it out from manifold pressure, rpm and temperature. It is an estimate: compare it against a fill-up and adjust Volumetric efficiency on the Vehicle tab.</string>
+    <string name="dash_consumption_needs">Nothing to work consumption out from: the car did not report %1$s. The app uses a ready fuel rate, an air-flow meter or manifold pressure - with none of those there is nowhere to get it.</string>
     <string name="dash_no_answer">no answer</string>
     <string name="dash_consumption_average">Trip average</string>
     <string name="dash_fuel_used">Fuel used</string>

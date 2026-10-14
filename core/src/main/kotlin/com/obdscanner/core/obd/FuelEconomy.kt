@@ -27,6 +27,48 @@ object FuelEconomy {
     }
 
     /**
+     * Откуда взялся расход и сколько его.
+     *
+     * [estimated] = true означает "посчитано из давления во впуске" - такое
+     * число экран обязан пометить, чтобы его не принимали за показания
+     * расходомера.
+     */
+    data class FuelRate(val litresPerHour: Double, val estimated: Boolean)
+
+    /**
+     * Расход из того, что машина вообще отдала.
+     *
+     * Порядок важен и однажды уже подвёл: блок может ЗАЯВИТЬ расходомер и при
+     * этом на него не отвечать. Поэтому выбор идёт не по тому, что блок про
+     * себя сообщил, а по тому, какие значения реально пришли - null проходит
+     * дальше по цепочке, а не обрывает её.
+     */
+    fun litresPerHour(
+        fuelRate: Double? = null,
+        maf: Double? = null,
+        rpm: Double? = null,
+        mapKpa: Double? = null,
+        intakeTempC: Double? = null,
+        displacementL: Double = 0.0,
+        volumetricEfficiency: Double = DEFAULT_VOLUMETRIC_EFFICIENCY,
+        diesel: Boolean = false,
+    ): FuelRate? {
+        fuelRate?.let { return FuelRate(it, estimated = false) }
+        maf?.let { return FuelRate(litresPerHourFromMaf(it, diesel), estimated = false) }
+        val air = mafFromMap(
+            rpm = rpm ?: return null,
+            mapKpa = mapKpa ?: return null,
+            // Температуру впуска машина отдаёт не всегда, а ошибка в десять
+            // градусов стоит около трёх процентов расхода - это несравнимо с
+            // отсутствием числа вообще.
+            intakeTempC = intakeTempC ?: 20.0,
+            displacementL = displacementL,
+            volumetricEfficiency = volumetricEfficiency,
+        ) ?: return null
+        return FuelRate(litresPerHourFromMaf(air, diesel), estimated = true)
+    }
+
+    /**
      * Расход воздуха, г/с, посчитанный из давления во впуске.
      *
      * Нужно там, где расходомера нет вовсе. ЗМЗ-409 на УАЗ Патриоте - как раз

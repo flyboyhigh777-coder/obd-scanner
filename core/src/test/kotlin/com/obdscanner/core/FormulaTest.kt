@@ -171,4 +171,77 @@ class FormulaTest {
         assertNull(FuelEconomy.mafFromMap(850.0, 36.0, 55.0, 0.0))
     }
 
+    /**
+     * Готовый расход от машины - лучший источник, его и берём.
+     */
+    @Test
+    fun readyFuelRateWins() {
+        val rate = FuelEconomy.litresPerHour(
+            fuelRate = 2.4,
+            maf = 6.0,
+            rpm = 850.0,
+            mapKpa = 36.0,
+            displacementL = 2.693,
+        )
+        assertEquals(2.4, rate!!.litresPerHour, 0.001)
+        assertFalse("это измерение, а не оценка", rate.estimated)
+    }
+
+    /**
+     * Блок ЗАЯВИЛ расходомер, но на него не отвечает - и расход пропадал
+     * совсем. Теперь цепочка идёт дальше, к давлению во впуске.
+     *
+     * Ровно этот случай и был на живой машине: ЗМЗ-409 не отдаёт ни 0x10, ни
+     * 0x5E, и расход показывал прочерк.
+     */
+    @Test
+    fun silentAirflowFallsThroughToManifoldPressure() {
+        val rate = FuelEconomy.litresPerHour(
+            fuelRate = null,
+            maf = null,
+            rpm = 874.0,
+            mapKpa = 36.0,
+            intakeTempC = 55.0,
+            displacementL = 2.693,
+        )
+        assertNotNull("расход посчитан по давлению", rate)
+        assertTrue("и помечен как расчётный", rate!!.estimated)
+        assertTrue("холостой ход похож на правду: ${rate.litresPerHour}", rate.litresPerHour in 1.2..3.0)
+    }
+
+    /** Температуру впуска машина отдаёт не всегда - это не повод не считать. */
+    @Test
+    fun manifoldPathWorksWithoutIntakeTemperature() {
+        val rate = FuelEconomy.litresPerHour(
+            rpm = 874.0,
+            mapKpa = 36.0,
+            intakeTempC = null,
+            displacementL = 2.693,
+        )
+        assertNotNull(rate)
+        assertTrue(rate!!.estimated)
+    }
+
+    /** А вот без оборотов или давления считать действительно нечего. */
+    @Test
+    fun nothingToComputeFrom() {
+        assertNull(FuelEconomy.litresPerHour(rpm = 874.0, mapKpa = null, displacementL = 2.693))
+        assertNull(FuelEconomy.litresPerHour(rpm = null, mapKpa = 36.0, displacementL = 2.693))
+        assertNull(FuelEconomy.litresPerHour(displacementL = 2.693))
+    }
+
+    /** Коэффициент наполнения двигает результат - иначе подгонять было бы нечем. */
+    @Test
+    fun volumetricEfficiencyChangesTheResult() {
+        val low = FuelEconomy.litresPerHour(
+            rpm = 874.0, mapKpa = 36.0, intakeTempC = 55.0,
+            displacementL = 2.693, volumetricEfficiency = 0.6,
+        )!!.litresPerHour
+        val high = FuelEconomy.litresPerHour(
+            rpm = 874.0, mapKpa = 36.0, intakeTempC = 55.0,
+            displacementL = 2.693, volumetricEfficiency = 1.0,
+        )!!.litresPerHour
+        assertTrue("больше наполнение - больше расход: $low -> $high", high > low * 1.5)
+    }
+
 }

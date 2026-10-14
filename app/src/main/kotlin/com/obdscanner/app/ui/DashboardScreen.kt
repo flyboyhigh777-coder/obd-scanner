@@ -467,6 +467,15 @@ private fun FuelPanel(viewModel: ObdViewModel, live: LiveSnapshot, units: UnitSy
         if (live.consumptionEstimated) {
             Hint(stringResource(R.string.dash_consumption_estimated_hint))
         }
+        // Прочерк молча - худший ответ: непонятно, ждать или настраивать.
+        if (live.consumptionNeeds.isNotEmpty()) {
+            Hint(
+                stringResource(
+                    R.string.dash_consumption_needs,
+                    live.consumptionNeeds.joinToString(", ")
+                )
+            )
+        }
     }
 }
 
