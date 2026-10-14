@@ -1,6 +1,7 @@
 package com.obdscanner.app.data
 
 import android.content.Context
+import com.obdscanner.app.transport.BluetoothConnectMethod
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.Pids
@@ -108,6 +109,26 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit()
             .putFloat(KEY_VOLTAGE_OFFSET, value.coerceIn(-MAX_VOLTAGE_OFFSET, MAX_VOLTAGE_OFFSET))
             .apply()
+
+    /**
+     * Способ открытия Bluetooth-канала. По умолчанию перебор; закрепляют
+     * вручную тогда, когда известно, какой способ работает с этим адаптером -
+     * перебор занимает секунды на каждом подключении.
+     */
+    var bluetoothMethod: BluetoothConnectMethod
+        get() = BluetoothConnectMethod.fromKey(prefs.getString(KEY_BT_METHOD, null))
+        set(value) = prefs.edit().putString(KEY_BT_METHOD, value.key).apply()
+
+    /**
+     * Опрашивать ли режим 06 в полной проверке.
+     *
+     * Он честно медленный: запрос на каждый монитор, а их у машины с двумя
+     * банками бывает больше двадцати. Поэтому его можно выключить, чтобы
+     * проверка занимала секунды, а не полминуты.
+     */
+    var quickCheckMonitorTests: Boolean
+        get() = prefs.getBoolean(KEY_QUICK_MONITOR_TESTS, true)
+        set(value) = prefs.edit().putBoolean(KEY_QUICK_MONITOR_TESTS, value).apply()
 
     /**
      * Протокол шины, который задаётся адаптеру. Автоопределение работает всегда,
@@ -239,6 +260,8 @@ class AppSettings(context: Context) {
         const val MAX_VOLTAGE_OFFSET = 1.0f
         const val KEY_GAUGE_STYLE = "gauge_style"
         const val KEY_PROTOCOL = "obd_protocol"
+        const val KEY_BT_METHOD = "bt_method"
+        const val KEY_QUICK_MONITOR_TESTS = "quick_check_mode06"
         const val KEY_PROFILE = "vehicle_profile"
         const val KEY_TANK = "tank_litres"
         const val KEY_MASS = "curb_mass"

@@ -26,7 +26,17 @@ import com.obdscanner.core.electrical.CrankingResult
 import com.obdscanner.core.dtc.DtcCatalog
 import com.obdscanner.core.dtc.DtcSnapshot
 import com.obdscanner.core.dtc.DtcSource
+import com.obdscanner.app.data.ReportExport
+import com.obdscanner.app.transport.BluetoothConnectMethod
+import com.obdscanner.core.diag.QuickCheck
+import com.obdscanner.core.diag.QuickCheckReport
+import com.obdscanner.core.diag.QuickCheckStep
+import com.obdscanner.core.elm.AdapterInfo
 import com.obdscanner.core.elm.ElmReply
+import com.obdscanner.core.monitor.MonitorTest
+import com.obdscanner.core.monitor.O2SensorLocation
+import com.obdscanner.core.monitor.O2SensorTest
+import com.obdscanner.core.obd.InUsePerformance
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.modules.FoundModule
 import com.obdscanner.core.modules.ModuleScan
@@ -216,6 +226,16 @@ data class VehicleState(
     val vinInfo: VinInfo? = null,
     val ecuName: String? = null,
     val calibrationId: String? = null,
+    /**
+     * Все идентификаторы калибровки, а не только первый: у современных блоков
+     * их два-три, по одному на программный модуль.
+     */
+    val calibrationIds: List<String> = emptyList(),
+    /**
+     * Контрольные суммы калибровок. Заводской CALID с неподходящим CVN -
+     * признак того, что прошивку правили.
+     */
+    val calibrationVerificationNumbers: List<String> = emptyList(),
     val adapterVoltage: Double? = null,
     val obdStandard: Int? = null,
     val fuelType: Int? = null,
@@ -240,6 +260,44 @@ data class PerformanceState(
 )
 
 /** Что умеет попросить интерфейс у рабочего потока. */
+/**
+ * Результаты бортовых самодиагностик - то, что видно до того, как загорится
+ * Check Engine.
+ */
+data class TestsState(
+    val running: Boolean = false,
+    val loaded: Boolean = false,
+    /** Режим 06: результаты с пределами. */
+    val monitorTests: List<MonitorTest> = emptyList(),
+    /** Где стоят лямбда-зонды (PID 0x13 или 0x1D). */
+    val o2Locations: List<O2SensorLocation> = emptyList(),
+    /** Режим 05 - только на машинах без CAN, поэтому обычно пусто. */
+    val o2Tests: List<O2SensorTest> = emptyList(),
+    /** Счётчики наработки тестов (режим 09 PID 08/0B). */
+    val performance: InUsePerformance? = null,
+    /** Почему пусто, если пусто. */
+    val message: String? = null,
+) {
+    val failed: List<MonitorTest> get() = monitorTests.filter { it.passed == false }
+}
+
+/** Полная проверка одним нажатием и её отчёт. */
+data class QuickCheckState(
+    val running: Boolean = false,
+    val step: QuickCheckStep? = null,
+    val report: QuickCheckReport? = null,
+    val exportedUri: Uri? = null,
+)
+
+/** Что за адаптер в разъёме и какие команды он действительно понимает. */
+data class AdapterState(
+    val checking: Boolean = false,
+    val info: AdapterInfo? = null,
+    /** Каким способом открылся Bluetooth-канал. */
+    val connectMethod: BluetoothConnectMethod? = null,
+    val message: String? = null,
+)
+
 private sealed interface ObdTask {
     data object ReadDtcs : ObdTask
     data object ClearDtcs : ObdTask
@@ -250,6 +308,10 @@ private sealed interface ObdTask {
     data object SnapshotPids : ObdTask
     data object ComparePids : ObdTask
     data class Terminal(val command: String) : ObdTask
+    data object ReadTests : ObdTask
+    data object QuickCheckRun : ObdTask
+    data object CheckAdapter : ObdTask
+    data class WriteVoltageCalibration(val volts: Double?) : ObdTask
 }
 
 /**
@@ -286,6 +348,15 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _modules = MutableStateFlow(ModuleScanState())
     val modules: StateFlow<ModuleScanState> = _modules.asStateFlow()
+
+    private val _tests = MutableStateFlow(TestsState())
+    val tests: StateFlow<TestsState> = _tests.asStateFlow()
+
+    private val _quickCheck = MutableStateFlow(QuickCheckState())
+    val quickCheck: StateFlow<QuickCheckState> = _quickCheck.asStateFlow()
+
+    private val _adapter = MutableStateFlow(AdapterState())
+    val adapter: StateFlow<AdapterState> = _adapter.asStateFlow()
 
     /**
      * Прочитанные ошибки, которые остаются после отключения.
@@ -356,6 +427,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private val _protocol = MutableStateFlow(settings.protocol)
     val protocol: StateFlow<ObdProtocol> = _protocol.asStateFlow()
 
+    private val _bluetoothMethod = MutableStateFlow(settings.bluetoothMethod)
+    val bluetoothMethod: StateFlow<BluetoothConnectMethod> = _bluetoothMethod.asStateFlow()
+
+    private val _quickCheckMonitorTests = MutableStateFlow(settings.quickCheckMonitorTests)
+    val quickCheckMonitorTests: StateFlow<Boolean> = _quickCheckMonitorTests.asStateFlow()
+
     /** Привязался ли сокет Wi-Fi к сети адаптера - показывается подсказкой. */
     private val _boundToWifi = MutableStateFlow<Boolean?>(null)
     val boundToWifi: StateFlow<Boolean?> = _boundToWifi.asStateFlow()
@@ -393,6 +470,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      */
     @Volatile
     private var voltageOffset = 0.0
+
+    /** Флаги "прервать" для долгих чтений - их ставит интерфейс, читает рабочий цикл. */
+    @Volatile
+    private var testsStop = false
+
+    @Volatile
+    private var quickCheckStop = false
 
     @Volatile
     private var crankTestRunning = false
@@ -611,6 +695,76 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         _autoReconnect.value = enabled
     }
 
+    /**
+     * Результаты бортовых тестов (режимы 06 и 05) и счётчики наработки.
+     *
+     * Запросов много - по одному на каждый монитор, - поэтому чтение не
+     * начинается само при открытии экрана: его запускает человек, когда
+     * действительно смотрит.
+     */
+    fun readTests() {
+        if (_tests.value.running) return
+        _tests.value = _tests.value.copy(running = true, message = null)
+        testsStop = false
+        tasks.trySend(ObdTask.ReadTests)
+    }
+
+    fun stopTests() {
+        testsStop = true
+    }
+
+    /** Полная проверка: всё, что можно прочитать, одним отчётом. */
+    fun runQuickCheck() {
+        if (_quickCheck.value.running) return
+        _quickCheck.value = QuickCheckState(running = true)
+        quickCheckStop = false
+        tasks.trySend(ObdTask.QuickCheckRun)
+    }
+
+    fun stopQuickCheck() {
+        quickCheckStop = true
+    }
+
+    /** Отчёт текстовым файлом - его отдают в сервис или прикладывают к переписке. */
+    fun exportQuickCheck(onDone: (ExportResult) -> Unit) {
+        val report = _quickCheck.value.report ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = ReportExport.save(getApplication(), report.toText())
+            withContext(Dispatchers.Main) {
+                _quickCheck.value = _quickCheck.value.copy(exportedUri = result.uri)
+                onDone(result)
+            }
+        }
+    }
+
+    /** Опознание адаптера и проверка команд, на которых держатся функции. */
+    fun checkAdapter() {
+        if (_adapter.value.checking) return
+        _adapter.value = _adapter.value.copy(checking = true, message = null)
+        tasks.trySend(ObdTask.CheckAdapter)
+    }
+
+    /**
+     * Записать поправку напряжения в сам адаптер (`AT CV`).
+     *
+     * null - вернуть заводскую калибровку. Отличие от поправки в настройках
+     * приложения: записанная в адаптер действует для всех программ, но живёт в
+     * железке, а не в телефоне.
+     */
+    fun writeVoltageCalibration(volts: Double?) {
+        tasks.trySend(ObdTask.WriteVoltageCalibration(volts))
+    }
+
+    fun setBluetoothMethod(method: BluetoothConnectMethod) {
+        settings.bluetoothMethod = method
+        _bluetoothMethod.value = method
+    }
+
+    fun setQuickCheckMonitorTests(enabled: Boolean) {
+        settings.quickCheckMonitorTests = enabled
+        _quickCheckMonitorTests.value = enabled
+    }
+
     fun setProtocol(protocol: ObdProtocol) {
         settings.protocol = protocol
         _protocol.value = protocol
@@ -795,7 +949,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         is ConnectionTarget.Bluetooth -> {
             val device = BluetoothScanner.findDevice(getApplication<Application>(), target.address)
                 ?: throw IllegalStateException("Адаптер ${target.name} не найден")
-            BluetoothObdChannel(device).also { it.open() }
+            BluetoothObdChannel(device, settings.bluetoothMethod).also {
+                it.open()
+                // Какой способ сработал - полезно знать: именно его и
+                // закрепляют в настройках, чтобы не ждать перебор каждый раз.
+                _adapter.value = _adapter.value.copy(connectMethod = it.usedMethod)
+            }
         }
 
         is ConnectionTarget.BluetoothLe -> {
@@ -1331,12 +1490,79 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
             ObdTask.ComparePids -> runPidCompare(session)
 
+            ObdTask.ReadTests -> runTestsRead(session)
+
+            ObdTask.QuickCheckRun -> {
+                val report = QuickCheck(session, withMonitorTests = settings.quickCheckMonitorTests)
+                    .run(
+                        onStep = { step ->
+                            _quickCheck.value = _quickCheck.value.copy(step = step)
+                        },
+                        shouldStop = { quickCheckStop }
+                    )
+                _quickCheck.value = QuickCheckState(running = false, step = null, report = report)
+            }
+
+            ObdTask.CheckAdapter -> {
+                val info = session.checkAdapter()
+                _adapter.value = _adapter.value.copy(checking = false, info = info)
+            }
+
+            is ObdTask.WriteVoltageCalibration -> {
+                val ok = if (task.volts == null) {
+                    session.resetAdapterVoltageCalibration()
+                } else {
+                    session.calibrateAdapterVoltage(task.volts)
+                }
+                _adapter.value = _adapter.value.copy(
+                    message = getApplication<Application>().getString(
+                        if (ok) R.string.adapter_calibration_written else R.string.adapter_calibration_failed
+                    )
+                )
+            }
+
             is ObdTask.Terminal -> {
                 val reply: ElmReply = session.raw(task.command)
                 val answer = reply.error?.text ?: reply.lines.joinToString(" / ").ifEmpty { "—" }
                 _terminal.value = (_terminal.value + "> ${task.command.uppercase()}" + answer).takeLast(TERMINAL_LINES)
             }
         }
+    }
+
+    /**
+     * Чтение результатов бортовых тестов.
+     *
+     * Режим 05 спрашивается только на машинах без CAN: на CAN его нет по
+     * стандарту (там то же самое отдаёт режим 06), и запрашивать его значило бы
+     * ждать таймаут на каждом номере теста впустую.
+     */
+    private fun runTestsRead(session: ObdSession) {
+        val locations = session.readO2SensorLocations()
+        val monitorTests = session.readAllMonitorTests { testsStop }
+        val legacyTests = if (session.protocol?.isCan == false) {
+            locations.filter { it.present }.flatMap { location ->
+                if (testsStop) emptyList() else session.readO2SensorTests(location.mask)
+            }
+        } else {
+            emptyList()
+        }
+        val performance = session.readInUsePerformance(
+            compressionIgnition = _live.value.monitor?.compressionIgnition == true
+        )
+        val app = getApplication<Application>()
+        _tests.value = TestsState(
+            running = false,
+            loaded = true,
+            monitorTests = monitorTests,
+            o2Locations = locations,
+            o2Tests = legacyTests,
+            performance = performance,
+            message = when {
+                testsStop -> app.getString(R.string.tests_stopped)
+                monitorTests.isEmpty() && legacyTests.isEmpty() -> app.getString(R.string.tests_empty)
+                else -> null
+            }
+        )
     }
 
     private fun loadVehicle(session: ObdSession) {
@@ -1354,6 +1580,8 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             vinInfo = vin?.let { VinDecoder.decode(it) },
             ecuName = session.readEcuName(),
             calibrationId = session.readCalibrationId(),
+            calibrationIds = session.readCalibrationIds(),
+            calibrationVerificationNumbers = session.readCalibrationVerificationNumbers(),
             adapterVoltage = session.adapterVoltage(),
             obdStandard = session.read(Pids.OBD_STANDARD)?.toInt(),
             fuelType = fuelType,

@@ -38,11 +38,13 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.app.transport.BluetoothConnectMethod
 import com.obdscanner.app.transport.BluetoothScanner
 import com.obdscanner.app.transport.ConnectionTarget
 import com.obdscanner.app.transport.DiscoveredDevice
 import com.obdscanner.app.transport.LinkKind
 import com.obdscanner.app.transport.WifiObdChannel
+import com.obdscanner.core.elm.AdapterChip
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
@@ -83,6 +85,8 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     val gaugeStyle by viewModel.gaugeStyle.collectAsState()
     val protocol by viewModel.protocol.collectAsState()
     val boundToWifi by viewModel.boundToWifi.collectAsState()
+    val bluetoothMethod by viewModel.bluetoothMethod.collectAsState()
+    val adapter by viewModel.adapter.collectAsState()
 
     // Открываемся на том способе, которым подключались в прошлый раз.
     var source by remember {
@@ -96,6 +100,7 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     }
     var scanDenied by remember { mutableStateOf(false) }
     var protocolPicker by remember { mutableStateOf(false) }
+    var btMethodPicker by remember { mutableStateOf(false) }
 
     val connectPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -305,6 +310,8 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             }
         }
 
+        AdapterPanel(viewModel, connection)
+
         Panel {
             PanelTitle(stringResource(R.string.connect_settings))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -316,6 +323,32 @@ fun ConnectScreen(viewModel: ObdViewModel) {
                 )
             }
             Hint(stringResource(R.string.connect_auto_reconnect_hint))
+
+            // Способ открытия Bluetooth-канала. Нужен тем адаптерам, которые
+            // открываются только одним из четырёх способов: перебор их находит,
+            // но тратит на это секунды при каждом подключении.
+            Text(stringResource(R.string.adapter_bt_method), color = TextBright)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                SegmentButton(
+                    BluetoothConnectMethod.AUTO.title,
+                    bluetoothMethod == BluetoothConnectMethod.AUTO,
+                    Modifier.weight(1f)
+                ) { viewModel.setBluetoothMethod(BluetoothConnectMethod.AUTO) }
+                OutlinedButton(onClick = { btMethodPicker = true }, modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (bluetoothMethod == BluetoothConnectMethod.AUTO) {
+                            stringResource(R.string.adapter_bt_method_pick)
+                        } else {
+                            bluetoothMethod.title
+                        },
+                        color = TextBright
+                    )
+                }
+            }
+            Hint(stringResource(R.string.adapter_bt_method_hint))
+            adapter.connectMethod?.let {
+                Hint(stringResource(R.string.adapter_bt_method_used, it.title))
+            }
 
             Text(stringResource(R.string.connect_protocol_title), color = TextBright)
             OutlinedButton(onClick = { protocolPicker = true }, modifier = Modifier.fillMaxWidth()) {
@@ -410,6 +443,35 @@ fun ConnectScreen(viewModel: ObdViewModel) {
         if (connection is ConnectionState.Connected) {
             TerminalPanel(terminal, viewModel::sendTerminalCommand)
         }
+    }
+
+    if (btMethodPicker) {
+        AlertDialog(
+            onDismissRequest = { btMethodPicker = false },
+            title = { Text(stringResource(R.string.adapter_bt_method)) },
+            text = {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    BluetoothConnectMethod.entries.forEach { candidate ->
+                        SegmentButton(
+                            text = candidate.title,
+                            selected = candidate == bluetoothMethod,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            viewModel.setBluetoothMethod(candidate)
+                            btMethodPicker = false
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { btMethodPicker = false }) {
+                    Text(stringResource(R.string.dash_close))
+                }
+            }
+        )
     }
 
     if (protocolPicker) {
@@ -559,3 +621,73 @@ private fun TerminalPanel(lines: List<String>, onSend: (String) -> Unit) {
 
 /** Язык интерфейса - для текстов, которые :core отдаёт парой ru/en. */
 internal fun ru(): Boolean = com.obdscanner.core.elm.ObdText.russian
+
+/**
+ * Что за адаптер в разъёме и что он действительно умеет.
+ *
+ * Половина жалоб на программы диагностики - это жалобы на адаптер: клон за
+ * четыреста рублей отвечает "ELM327 v2.1", не понимает половины команд и
+ * отвечает "OK" на то, чего не делает. Поэтому проверка не спрашивает адаптер,
+ * кто он, а проверяет те самые команды, на которых держатся функции
+ * приложения, - и тогда видно, кто виноват в пустом экране: машина, программа
+ * или железка.
+ */
+@Composable
+private fun AdapterPanel(viewModel: ObdViewModel, connection: ConnectionState) {
+    val adapter by viewModel.adapter.collectAsState()
+    val info = adapter.info
+    val dash = stringResource(R.string.common_dash)
+
+    Panel {
+        PanelTitle(stringResource(R.string.adapter_check_title))
+        Hint(stringResource(R.string.adapter_check_hint))
+
+        Button(
+            onClick = { viewModel.checkAdapter() },
+            enabled = connection is ConnectionState.Connected && !adapter.checking,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                stringResource(
+                    if (adapter.checking) R.string.adapter_checking else R.string.adapter_check_button
+                )
+            )
+        }
+
+        if (info != null) {
+            InfoRow(stringResource(R.string.adapter_name), info.description.ifEmpty { dash })
+            InfoRow(stringResource(R.string.adapter_chip), info.chip.title)
+            if (info.version.isNotEmpty()) {
+                InfoRow(stringResource(R.string.adapter_version), info.version)
+            }
+            if (info.identifier.isNotEmpty()) {
+                InfoRow(stringResource(R.string.adapter_identifier), info.identifier)
+            }
+            if (info.serial.isNotEmpty()) {
+                InfoRow(stringResource(R.string.adapter_serial), info.serial)
+            }
+            if (info.chip == AdapterChip.ELM327_CLONE) {
+                Hint(stringResource(R.string.adapter_clone_hint))
+            }
+            InfoRow(
+                stringResource(R.string.adapter_commands),
+                stringResource(
+                    R.string.adapter_commands_value,
+                    info.checks.count { it.supported },
+                    info.checks.size
+                ),
+                if (info.missing.isEmpty()) GaugeGreen else GaugeAmber
+            )
+            info.missing.forEach { item ->
+                InfoRow(item.title, stringResource(R.string.adapter_not_supported), GaugeAmber)
+            }
+            if (info.missing.isNotEmpty()) {
+                Hint(stringResource(R.string.adapter_missing_hint))
+            }
+            if (!info.canScanModules) {
+                Hint(stringResource(R.string.adapter_no_module_scan))
+            }
+        }
+        adapter.message?.let { Hint(it) }
+    }
+}

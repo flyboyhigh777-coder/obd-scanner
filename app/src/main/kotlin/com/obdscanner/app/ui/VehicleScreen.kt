@@ -197,7 +197,25 @@ fun VehicleScreen(viewModel: ObdViewModel) {
         Panel {
             PanelTitle(stringResource(R.string.vehicle_ecu))
             InfoRow(stringResource(R.string.vehicle_ecu), vehicle.ecuName ?: dash)
-            InfoRow(stringResource(R.string.vehicle_calibration), vehicle.calibrationId ?: dash)
+            // Идентификаторов калибровки бывает несколько - по одному на
+            // программный модуль блока. Показываем все: первый из них не
+            // "главный", и выдавать его за весь блок нельзя.
+            if (vehicle.calibrationIds.size > 1) {
+                vehicle.calibrationIds.forEachIndexed { index, id ->
+                    InfoRow(stringResource(R.string.vehicle_calibration_n, index + 1), id)
+                }
+            } else {
+                InfoRow(
+                    stringResource(R.string.vehicle_calibration),
+                    vehicle.calibrationIds.firstOrNull() ?: vehicle.calibrationId ?: dash
+                )
+            }
+            vehicle.calibrationVerificationNumbers.forEachIndexed { index, cvn ->
+                InfoRow(stringResource(R.string.vehicle_cvn_n, index + 1), cvn)
+            }
+            if (vehicle.calibrationVerificationNumbers.isNotEmpty()) {
+                Hint(stringResource(R.string.vehicle_cvn_hint))
+            }
             InfoRow(
                 stringResource(R.string.vehicle_standard),
                 vehicle.obdStandard?.let { ObdStandard.name(it) } ?: dash

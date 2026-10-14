@@ -273,6 +273,52 @@ class ObdAppFlowTest {
         compose.onNodeWithText("Ответившие параметры: ${found.size}").performScrollTo().assertExists()
         shot("18_pid_scan")
 
+        // Бортовые тесты: режим 06 и полная проверка с отчётом.
+        //
+        // Главное здесь не то, что экран открывается, а что провалившийся тест
+        // согласован с кодом в памяти блока: виртуальная машина отдаёт P0420
+        // (эффективность катализатора) и тест катализатора вне пределов. Если
+        // разбор режима 06 где-то сдвинется на байт, это рассыплется.
+        openTab("Тесты")
+        shot("19_tests_empty")
+        compose.onNodeWithText("Результаты").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Прочитать").performScrollTo().performClick()
+        pumpUntil(30_000, "чтение режима 06") { vm.tests.value.loaded && !vm.tests.value.running }
+        val monitorTests = vm.tests.value.monitorTests
+        assertTrue("результаты пришли: ${monitorTests.size}", monitorTests.size >= 8)
+        assertEquals("провалился ровно один тест", 1, vm.tests.value.failed.size)
+        assertEquals("и это катализатор банка 1", 0x21, vm.tests.value.failed.first().mid)
+        // Счётчики наработки читаются тем же заданием.
+        assertNotNull("счётчики наработки прочитаны", vm.tests.value.performance)
+        assertEquals(120, vm.tests.value.performance!!.obdConditions)
+        shot("20_tests_mode06")
+
+        compose.onNodeWithText("Наработка").performClick()
+        compose.waitForIdle()
+        shot("21_tests_counters")
+
+        // Полная проверка: одно нажатие, отчёт на экране и файлом.
+        compose.onNodeWithText("Проверка").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Проверить всё").performScrollTo().performClick()
+        pumpUntil(60_000, "полная проверка") {
+            !vm.quickCheck.value.running && vm.quickCheck.value.report != null
+        }
+        val report = vm.quickCheck.value.report!!
+        assertEquals("XTA210990G1234567", report.vin)
+        assertEquals(listOf("5A3C1108"), report.calibrationVerificationNumbers)
+        // Сохранённые коды к этому моменту стёрты, а постоянный остался - и
+        // вывод отчёта должен говорить именно про него.
+        assertEquals(listOf("P0420"), report.permanent.map { it.code })
+        assertTrue("вывод про постоянные коды: ${report.verdict}", report.verdict.contains("постоянные"))
+        assertTrue("отчёт читается", report.toText().contains("ОТЧЁТ ДИАГНОСТИКИ"))
+        shot("22_tests_quick_check")
+
+        compose.onNodeWithText("Сохранить отчёт").performScrollTo().performClick()
+        pumpUntil(20_000, "выгрузка отчёта") { vm.quickCheck.value.exportedUri != null }
+        shot("23_tests_report_saved")
+
         // Авто: профиль машины и справочники.
         openTab("Авто")
         pumpUntil(20_000, "данные автомобиля") { vm.vehicle.value.loaded }
