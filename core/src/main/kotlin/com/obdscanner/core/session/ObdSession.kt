@@ -3,6 +3,8 @@ package com.obdscanner.core.session
 import com.obdscanner.core.dtc.Dtc
 import com.obdscanner.core.dtc.DtcCodec
 import com.obdscanner.core.dtc.DtcSource
+import com.obdscanner.core.elm.AdapterInfo
+import com.obdscanner.core.elm.AdapterProbe
 import com.obdscanner.core.elm.Elm
 import com.obdscanner.core.elm.ElmError
 import com.obdscanner.core.elm.ElmReply
@@ -12,6 +14,13 @@ import com.obdscanner.core.elm.ObdText
 import com.obdscanner.core.modules.FoundModule
 import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
+import com.obdscanner.core.monitor.MonitorIds
+import com.obdscanner.core.monitor.MonitorSupport
+import com.obdscanner.core.monitor.MonitorTest
+import com.obdscanner.core.monitor.O2SensorLocation
+import com.obdscanner.core.monitor.O2SensorTest
+import com.obdscanner.core.obd.InUsePerformance
+import com.obdscanner.core.obd.Mode09
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.ObdPid
@@ -358,6 +367,170 @@ class ObdSession(
         return out
     }
 
+    // --- режимы 05, 06 и 09: бортовые тесты и прошивка ---------------------
+
+    /**
+     * Какие мониторы (MID) отдаёт режим 06. Карты запрашиваются по той же
+     * схеме, что и карты PID, и ровно до первой, которая не обещает следующую:
+     * восемь запросов вслепую - это полсекунды на пустом месте.
+     */
+    fun readSupportedMonitorIds(): Set<Int> {
+        val out = LinkedHashSet<Int>()
+        for (base in MonitorSupport.RANGE_MIDS) {
+            val data = readMonitorPayload(base) ?: break
+            // Карта поддержки - это 4 байта следом за эхом MID.
+            if (data.size < 5) break
+            out.addAll(MonitorSupport.decode(base, data.copyOfRange(1, 5)))
+            if (!MonitorSupport.hasNextRange(base, out)) break
+        }
+        return out.filterNot { MonitorIds.isSupportMap(it) }.toSet()
+    }
+
+    /**
+     * Результаты тестов одного монитора (CAN) либо одного теста (старые шины).
+     *
+     * Ответ разбирается вместе с эхом номера: в одном сообщении по CAN
+     * приходит несколько записей, и у каждой свой номер монитора - отбросив
+     * первый как "эхо", мы сдвинули бы все записи на байт.
+     */
+    fun readMonitorTests(mid: Int): List<MonitorTest> {
+        val payload = readMonitorPayload(mid) ?: return emptyList()
+        val can = protocol?.isCan ?: true
+        return if (can) {
+            MonitorTest.decodeCan(payload)
+        } else {
+            listOfNotNull(MonitorTest.decodeLegacy(payload))
+        }
+    }
+
+    private fun readMonitorPayload(mid: Int): IntArray? {
+        val reply = adapter.request(Elm.request(Elm.Service.MONITOR_TESTS, mid), timeoutMillis = 3000)
+        if (reply.isError) return null
+        val frames = ObdPayload.allFrameData(reply, Elm.Service.MONITOR_TESTS)
+        if (frames.isEmpty()) return null
+        // Несколько блоков на шине отвечают каждый своим кадром; записи просто
+        // складываются в общий список, как это и показывают на экране.
+        val merged = ArrayList<Int>()
+        frames.forEach { merged.addAll(it.toList()) }
+        return merged.toIntArray().takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Все результаты режима 06 подряд. Запросов столько, сколько мониторов
+     * объявил блок, поэтому [shouldStop] обязателен: на машине с четырьмя
+     * банками их больше тридцати.
+     */
+    fun readAllMonitorTests(shouldStop: () -> Boolean = { false }): List<MonitorTest> {
+        val out = ArrayList<MonitorTest>()
+        for (mid in readSupportedMonitorIds()) {
+            if (shouldStop()) break
+            out.addAll(readMonitorTests(mid))
+        }
+        return out
+    }
+
+    /**
+     * Где стоят лямбда-зонды. PID 0x13 и 0x1D - это две разные раскладки одного
+     * байта, и машина поддерживает ровно одну; какую, видно по карте PID.
+     */
+    fun readO2SensorLocations(): List<O2SensorLocation> {
+        if (supports(0x13)) {
+            val data = readRaw(0x01, 0x13, expectedBytes = 1) ?: return emptyList()
+            return O2SensorLocation.decodeTwoBanks(data.firstOrNull() ?: return emptyList())
+        }
+        if (supports(0x1D)) {
+            val data = readRaw(0x01, 0x1D, expectedBytes = 1) ?: return emptyList()
+            return O2SensorLocation.decodeFourBanks(data.firstOrNull() ?: return emptyList())
+        }
+        return emptyList()
+    }
+
+    /**
+     * Какие тесты режима 05 блок отдаёт. Пустой ответ - не "ничего нет", а
+     * "карту не прислали"; тогда остаётся перебрать номера из стандарта.
+     */
+    fun readSupportedO2Tests(): Set<Int> {
+        val reply = adapter.request("0500", timeoutMillis = 2000)
+        if (reply.isError) return emptySet()
+        val payload = ObdPayload.allFrameData(reply, Elm.Service.O2_TESTS).firstOrNull() ?: return emptySet()
+        if (payload.size < 5) return emptySet()
+        return PidSupport.decode(0x00, payload.copyOfRange(1, 5))
+    }
+
+    /**
+     * Результаты тестов одного лямбда-зонда (режим 05).
+     *
+     * [sensorMask] - бит датчика, а не его номер: 0x01 - первый датчик первого
+     * банка, 0x10 - первый датчик второго. Передав "2" вместо 0x02, получишь
+     * ответ про другой датчик, и блок об этом не предупредит.
+     */
+    fun readO2SensorTests(sensorMask: Int, tids: List<Int> = O2SensorTest.TIDS): List<O2SensorTest> {
+        val out = ArrayList<O2SensorTest>()
+        for (tid in tids) {
+            val reply = adapter.request("05%02X%02X".format(tid, sensorMask), timeoutMillis = 1500)
+            if (reply.isError) continue
+            val payload = ObdPayload.allFrameData(reply, Elm.Service.O2_TESTS).firstOrNull() ?: continue
+            O2SensorTest.decode(payload)?.let { out.add(it) }
+        }
+        return out
+    }
+
+    /** Какие PID отдаёт режим 09 (данные об автомобиле). */
+    fun readVehicleInfoSupport(): Set<Int> {
+        val data = readRaw(Mode09.SERVICE, Mode09.SUPPORTED, expectedBytes = 4, timeoutMillis = 2000)
+            ?: return emptySet()
+        if (data.size < 4) return emptySet()
+        return PidSupport.decode(0x00, data)
+    }
+
+    /**
+     * Все идентификаторы калибровки, а не первый: у современных блоков их
+     * два-три, по одному на программный модуль.
+     */
+    fun readCalibrationIds(): List<String> {
+        val data = readRaw(Mode09.SERVICE, Mode09.CALID, timeoutMillis = 3000) ?: return emptyList()
+        return Mode09.calibrationIds(data)
+    }
+
+    /**
+     * Контрольные суммы калибровок (CVN). Это не текст, а четыре байта на
+     * каждую калибровку: заводской CALID с неподходящим CVN - признак
+     * правленой прошивки.
+     */
+    fun readCalibrationVerificationNumbers(): List<String> {
+        val data = readRaw(Mode09.SERVICE, Mode09.CVN, timeoutMillis = 3000) ?: return emptyList()
+        return Mode09.calibrationVerificationNumbers(data)
+    }
+
+    /**
+     * Счётчики наработки бортовых тестов. У бензина и дизеля это разные PID с
+     * разным набором счётчиков, поэтому тип двигателя нужно знать заранее - его
+     * сообщает статус тестов (режим 01 PID 01).
+     */
+    fun readInUsePerformance(compressionIgnition: Boolean): InUsePerformance? {
+        val pid = if (compressionIgnition) Mode09.IPT_COMPRESSION else Mode09.IPT_SPARK
+        val data = readRaw(Mode09.SERVICE, pid, timeoutMillis = 3000) ?: return null
+        val result = InUsePerformance.decode(data, compressionIgnition)
+        return result.takeIf { it.counters.isNotEmpty() }
+    }
+
+    /**
+     * Код, из-за которого блок записал стоп-кадр (режим 02, PID 02).
+     *
+     * Без него стоп-кадр наполовину бесполезен: на машине с тремя ошибками
+     * видно обстановку в момент записи, но не видно, какая из трёх её
+     * записала. Пара нулей означает "кадра нет" - это не код P0000.
+     */
+    fun readFreezeFrameDtc(): String? {
+        val reply = adapter.request("020200", timeoutMillis = 2000)
+        if (reply.isError) return null
+        var data = ObdPayload.data(reply, 0x02, 0x02) ?: return null
+        if (data.size > 2 && data[0] == 0x00) data = data.copyOfRange(1, data.size)
+        if (data.size < 2) return null
+        if (data[0] == 0 && data[1] == 0) return null
+        return DtcCodec.decode(data[0], data[1])
+    }
+
     /**
      * Чтение пользовательского параметра: режим 01 или 22 с формулой, которую
      * вписал человек. Режим 22 стандартом описан, но НАБОР параметров в нём
@@ -550,6 +723,51 @@ class ObdSession(
         val text = reply.firstLine.uppercase().removeSuffix("V").trim()
         return text.toDoubleOrNull()
     }
+
+    /**
+     * Опознание адаптера и проверка команд, на которых держатся функции
+     * приложения.
+     *
+     * После проверки настройки восстанавливаются: проверка задаёт свой
+     * заголовок запроса и фильтр приёма, и оставить адаптер в таком виде
+     * нельзя - следующий же опрос ушёл бы одному блоку вместо всех.
+     */
+    fun checkAdapter(): AdapterInfo {
+        val info = AdapterProbe { command -> adapter.request(command, timeoutMillis = 1500) }.check()
+        configureAdapter()
+        // Заголовок запроса проверка сдвинула на конкретный блок - возвращаем
+        // широковещательный, которым и спрашивается OBD-II.
+        if (protocol?.isCan != false) {
+            adapter.request("ATSH7DF", timeoutMillis = 1000)
+        }
+        return info
+    }
+
+    /**
+     * Записать поправку вольтметра в сам адаптер (`AT CV`).
+     *
+     * Отличие от поправки в настройках приложения: записанная в адаптер, она
+     * действует для всех программ и переживает переустановку, но хранится в
+     * железке - и на чужом адаптере её не будет. Поэтому приложение умеет оба
+     * способа и не навязывает ни один.
+     */
+    fun calibrateAdapterVoltage(volts: Double): Boolean =
+        adapter.request(Elm.calibrateVoltage(volts), timeoutMillis = 2000).isOk
+
+    /** Вернуть заводскую калибровку вольтметра адаптера. */
+    fun resetAdapterVoltageCalibration(): Boolean =
+        adapter.request(Elm.RESET_VOLTAGE_CALIBRATION, timeoutMillis = 2000).isOk
+
+    /**
+     * Короткий запрос, чтобы связь не уснула.
+     *
+     * Клоны ELM327 закрывают канал Bluetooth сами, если в него минуту ничего
+     * не шлют, и следующий запрос уходит в уже мёртвый сокет - приложение при
+     * этом выглядит зависшим. Поэтому в паузах (экран ошибок открыт, человек
+     * читает) раз в пару секунд спрашивается напряжение: ответ не нужен, нужен
+     * сам обмен.
+     */
+    fun keepAlive(): Boolean = !adapter.request(Elm.READ_VOLTAGE, timeoutMillis = 1000).isError
 
     /** Произвольная команда - для экрана "Терминал". */
     fun raw(command: String, timeoutMillis: Long = 3000): ElmReply =

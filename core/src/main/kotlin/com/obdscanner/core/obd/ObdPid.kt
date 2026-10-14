@@ -19,6 +19,7 @@ enum class ObdUnit(val ru: String, val en: String) {
     KM("км", "km"),
     DEGREE("°", "°"),
     NEWTON_METRE("Н·м", "N·m"),
+    PASCAL("Па", "Pa"),
     RATIO("", "");
 
     val label: String get() = ObdText.pick(ru, en)
@@ -226,6 +227,187 @@ object Pids {
     val REFERENCE_TORQUE = pid(0x63, 2, "Номинальный момент двигателя", "Engine reference torque",
         ObdUnit.NEWTON_METRE, 0.0, 65535.0, decode = two { a, b -> (a * 256 + b).toDouble() })
 
+
+    // --- Параметры, которых не хватало до полного набора SAE J1979 ---
+    //
+    // Их добавление - не "побольше плиток": без них не проверить ни один
+    // неисправный узел на машинах с несколькими банками и широкополосными
+    // зондами. Формулы - из той же таблицы стандарта, что и выше.
+    //
+    // Часть PID стандарта несёт в одном ответе две величины (у 0x14 это
+    // напряжение зонда и коррекция по нему, у 0x24 - лямбда и напряжение).
+    // В каталоге такой PID один, и значение у него то, которое нужно для
+    // диагностики; вторая величина у банков всё равно доступна отдельными
+    // PID 0x06-0x09.
+
+    val SECONDARY_AIR_STATUS = pid(0x12, 1, "Система вторичного воздуха", "Commanded secondary air status",
+        ObdUnit.NONE, 0.0, 255.0, decode = one { it.toDouble() })
+
+    val O2_B1S3_VOLTAGE = pid(0x16, 2, "Лямбда-зонд 3 (банк 1), напряжение", "O2 sensor 3 (bank 1) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val O2_B1S4_VOLTAGE = pid(0x17, 2, "Лямбда-зонд 4 (банк 1), напряжение", "O2 sensor 4 (bank 1) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val O2_B2S1_VOLTAGE = pid(0x18, 2, "Лямбда-зонд 1 (банк 2), напряжение", "O2 sensor 1 (bank 2) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val O2_B2S2_VOLTAGE = pid(0x19, 2, "Лямбда-зонд 2 (банк 2), напряжение", "O2 sensor 2 (bank 2) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val O2_B2S3_VOLTAGE = pid(0x1A, 2, "Лямбда-зонд 3 (банк 2), напряжение", "O2 sensor 3 (bank 2) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val O2_B2S4_VOLTAGE = pid(0x1B, 2, "Лямбда-зонд 4 (банк 2), напряжение", "O2 sensor 4 (bank 2) voltage",
+        ObdUnit.VOLT, 0.0, 1.275, decimals = 3, decode = two { a, _ -> a / 200.0 })
+
+    val AUX_INPUT_STATUS = pid(0x1E, 1, "Отбор мощности (PTO)", "Auxiliary input status", ObdUnit.NONE,
+        0.0, 1.0, decode = one { (it and 1).toDouble() })
+
+    val FUEL_PRESSURE_REL_MANIFOLD = pid(0x22, 2, "Давление топлива относительно впуска",
+        "Fuel rail pressure relative to manifold", ObdUnit.KPA, 0.0, 5177.0, decimals = 2,
+        decode = two { a, b -> (a * 256 + b) * 0.079 })
+
+    val LAMBDA_B1S1 = pid(0x24, 4, "Лямбда, зонд 1 (банк 1)", "Equivalence ratio (bank 1 - sensor 1)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B1S2 = pid(0x25, 4, "Лямбда, зонд 2 (банк 1)", "Equivalence ratio (bank 1 - sensor 2)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B1S3 = pid(0x26, 4, "Лямбда, зонд 3 (банк 1)", "Equivalence ratio (bank 1 - sensor 3)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B1S4 = pid(0x27, 4, "Лямбда, зонд 4 (банк 1)", "Equivalence ratio (bank 1 - sensor 4)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B2S1 = pid(0x28, 4, "Лямбда, зонд 1 (банк 2)", "Equivalence ratio (bank 2 - sensor 1)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B2S2 = pid(0x29, 4, "Лямбда, зонд 2 (банк 2)", "Equivalence ratio (bank 2 - sensor 2)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B2S3 = pid(0x2A, 4, "Лямбда, зонд 3 (банк 2)", "Equivalence ratio (bank 2 - sensor 3)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_B2S4 = pid(0x2B, 4, "Лямбда, зонд 4 (банк 2)", "Equivalence ratio (bank 2 - sensor 4)",
+        ObdUnit.RATIO, 0.0, 2.0, decimals = 3, decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val COMMANDED_EVAP_PURGE = pid(0x2E, 1, "Заданная продувка адсорбера", "Commanded evaporative purge",
+        ObdUnit.PERCENT, 0.0, 100.0, decode = one { it * 100.0 / 255.0 })
+
+    /**
+     * Давление паров в системе улавливания - единственный параметр со знаком,
+     * который приходит в дополнительном коде: в бак при нагреве давление растёт,
+     * при остывании падает ниже атмосферного, и минус здесь нормален.
+     */
+    val EVAP_VAPOR_PRESSURE = pid(0x32, 2, "Давление паров топлива", "Evap system vapor pressure",
+        ObdUnit.PASCAL, -8192.0, 8192.0, decimals = 2, decode = two { a, b ->
+            val raw = a * 256 + b
+            (if (raw >= 32768) raw - 65536 else raw) / 4.0
+        })
+
+    val LAMBDA_WIDE_B1S1 = pid(0x34, 4, "Лямбда (широкополосный), зонд 1 банк 1",
+        "Equivalence ratio (wide range, bank 1 - sensor 1)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B1S2 = pid(0x35, 4, "Лямбда (широкополосный), зонд 2 банк 1",
+        "Equivalence ratio (wide range, bank 1 - sensor 2)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B1S3 = pid(0x36, 4, "Лямбда (широкополосный), зонд 3 банк 1",
+        "Equivalence ratio (wide range, bank 1 - sensor 3)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B1S4 = pid(0x37, 4, "Лямбда (широкополосный), зонд 4 банк 1",
+        "Equivalence ratio (wide range, bank 1 - sensor 4)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B2S1 = pid(0x38, 4, "Лямбда (широкополосный), зонд 1 банк 2",
+        "Equivalence ratio (wide range, bank 2 - sensor 1)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B2S2 = pid(0x39, 4, "Лямбда (широкополосный), зонд 2 банк 2",
+        "Equivalence ratio (wide range, bank 2 - sensor 2)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B2S3 = pid(0x3A, 4, "Лямбда (широкополосный), зонд 3 банк 2",
+        "Equivalence ratio (wide range, bank 2 - sensor 3)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val LAMBDA_WIDE_B2S4 = pid(0x3B, 4, "Лямбда (широкополосный), зонд 4 банк 2",
+        "Equivalence ratio (wide range, bank 2 - sensor 4)", ObdUnit.RATIO, 0.0, 2.0, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 32768.0 })
+
+    val CATALYST_TEMP_B1S2 = pid(0x3D, 2, "Температура катализатора (банк 1, датчик 2)",
+        "Catalyst temperature (bank 1, sensor 2)", ObdUnit.CELSIUS, -40.0, 6513.5, decimals = 1,
+        decode = two { a, b -> (a * 256 + b) / 10.0 - 40.0 })
+
+    val CATALYST_TEMP_B2S1 = pid(0x3E, 2, "Температура катализатора (банк 2, датчик 1)",
+        "Catalyst temperature (bank 2, sensor 1)", ObdUnit.CELSIUS, -40.0, 6513.5, decimals = 1,
+        decode = two { a, b -> (a * 256 + b) / 10.0 - 40.0 })
+
+    val CATALYST_TEMP_B2S2 = pid(0x3F, 2, "Температура катализатора (банк 2, датчик 2)",
+        "Catalyst temperature (bank 2, sensor 2)", ObdUnit.CELSIUS, -40.0, 6513.5, decimals = 1,
+        decode = two { a, b -> (a * 256 + b) / 10.0 - 40.0 })
+
+    val THROTTLE_B = pid(0x47, 1, "Положение дросселя B", "Absolute throttle position B", ObdUnit.PERCENT,
+        0.0, 100.0, decode = one { it * 100.0 / 255.0 })
+
+    val THROTTLE_C = pid(0x48, 1, "Положение дросселя C", "Absolute throttle position C", ObdUnit.PERCENT,
+        0.0, 100.0, decode = one { it * 100.0 / 255.0 })
+
+    val ACCEL_PEDAL_E = pid(0x4A, 1, "Педаль акселератора E", "Accelerator pedal position E", ObdUnit.PERCENT,
+        0.0, 100.0, decode = one { it * 100.0 / 255.0 })
+
+    val ACCEL_PEDAL_F = pid(0x4B, 1, "Педаль акселератора F", "Accelerator pedal position F", ObdUnit.PERCENT,
+        0.0, 100.0, decode = one { it * 100.0 / 255.0 })
+
+    /**
+     * Максимум расходомера, который объявляет сам блок. Нужен не приборке, а
+     * шкале: предел 300 г/с, одинаковый для всех машин, на атмосферном
+     * четырёхцилиндровом двигателе занимает треть шкалы.
+     */
+    val MAF_MAX = pid(0x50, 4, "Предел расходомера", "Maximum value for mass air flow",
+        ObdUnit.GRAM_PER_SEC, 0.0, 2550.0, decode = one { it * 10.0 })
+
+    val EVAP_VAPOR_PRESSURE_ABS = pid(0x53, 2, "Абсолютное давление паров топлива",
+        "Absolute evap system vapor pressure", ObdUnit.KPA, 0.0, 327.675, decimals = 3,
+        decode = two { a, b -> (a * 256 + b) / 200.0 })
+
+    val EVAP_VAPOR_PRESSURE_WIDE = pid(0x54, 2, "Давление паров топлива (широкий диапазон)",
+        "Evap system vapor pressure (wide range)", ObdUnit.PASCAL, -32767.0, 32768.0,
+        decode = two { a, b -> (a * 256 + b) - 32767.0 })
+
+    val SHORT_O2_TRIM_B1 = pid(0x55, 2, "Коррекция по заднему зонду, краткая (банк 1)",
+        "Short term secondary O2 trim (bank 1)", ObdUnit.PERCENT, -100.0, 99.2, decimals = 1,
+        decode = one { it / 1.28 - 100.0 })
+
+    val LONG_O2_TRIM_B1 = pid(0x56, 2, "Коррекция по заднему зонду, долгая (банк 1)",
+        "Long term secondary O2 trim (bank 1)", ObdUnit.PERCENT, -100.0, 99.2, decimals = 1,
+        decode = one { it / 1.28 - 100.0 })
+
+    val SHORT_O2_TRIM_B2 = pid(0x57, 2, "Коррекция по заднему зонду, краткая (банк 2)",
+        "Short term secondary O2 trim (bank 2)", ObdUnit.PERCENT, -100.0, 99.2, decimals = 1,
+        decode = one { it / 1.28 - 100.0 })
+
+    val LONG_O2_TRIM_B2 = pid(0x58, 2, "Коррекция по заднему зонду, долгая (банк 2)",
+        "Long term secondary O2 trim (bank 2)", ObdUnit.PERCENT, -100.0, 99.2, decimals = 1,
+        decode = one { it / 1.28 - 100.0 })
+
+    val FUEL_RAIL_PRESSURE_ABS = pid(0x59, 2, "Абсолютное давление в топливной рейке",
+        "Fuel rail absolute pressure", ObdUnit.KPA, 0.0, 655350.0, decode = two { a, b -> (a * 256 + b) * 10.0 })
+
+    val EMISSION_REQUIREMENTS = pid(0x5F, 1, "Нормы выбросов (код)", "Emission requirements (code)",
+        ObdUnit.NONE, 0.0, 255.0, decode = one { it.toDouble() })
+
+    val EGT_B1S1 = pid(0x78, 9, "Температура отработавших газов (банк 1)",
+        "Exhaust gas temperature (bank 1)", ObdUnit.CELSIUS, -40.0, 6513.5, decimals = 1,
+        decode = { d -> if (d.size < 3) null else (d[1] * 256 + d[2]) / 10.0 - 40.0 })
+
+    val EGT_B2S1 = pid(0x79, 9, "Температура отработавших газов (банк 2)",
+        "Exhaust gas temperature (bank 2)", ObdUnit.CELSIUS, -40.0, 6513.5, decimals = 1,
+        decode = { d -> if (d.size < 3) null else (d[1] * 256 + d[2]) / 10.0 - 40.0 })
+
     /** Все известные PID режима 01 по возрастанию номера. */
     val ALL: List<ObdPid> = listOf(
         MONITOR_STATUS, FUEL_SYSTEM_STATUS, ENGINE_LOAD, COOLANT_TEMP,
@@ -237,7 +419,19 @@ object Pids {
         ABSOLUTE_LOAD, EQUIVALENCE_RATIO, RELATIVE_THROTTLE, AMBIENT_TEMP, ACCEL_PEDAL_D,
         COMMANDED_THROTTLE, TIME_WITH_MIL, TIME_SINCE_CLEAR, FUEL_TYPE, ETHANOL_PERCENT,
         RELATIVE_ACCEL_PEDAL, HYBRID_BATTERY_LIFE, OIL_TEMP, INJECTION_TIMING, FUEL_RATE,
-        DEMANDED_TORQUE, ACTUAL_TORQUE, REFERENCE_TORQUE
+        DEMANDED_TORQUE, ACTUAL_TORQUE, REFERENCE_TORQUE,
+        SECONDARY_AIR_STATUS, O2_B1S3_VOLTAGE, O2_B1S4_VOLTAGE, O2_B2S1_VOLTAGE, O2_B2S2_VOLTAGE,
+        O2_B2S3_VOLTAGE, O2_B2S4_VOLTAGE, AUX_INPUT_STATUS, FUEL_PRESSURE_REL_MANIFOLD,
+        LAMBDA_B1S1, LAMBDA_B1S2, LAMBDA_B1S3, LAMBDA_B1S4,
+        LAMBDA_B2S1, LAMBDA_B2S2, LAMBDA_B2S3, LAMBDA_B2S4,
+        COMMANDED_EVAP_PURGE, EVAP_VAPOR_PRESSURE,
+        LAMBDA_WIDE_B1S1, LAMBDA_WIDE_B1S2, LAMBDA_WIDE_B1S3, LAMBDA_WIDE_B1S4,
+        LAMBDA_WIDE_B2S1, LAMBDA_WIDE_B2S2, LAMBDA_WIDE_B2S3, LAMBDA_WIDE_B2S4,
+        CATALYST_TEMP_B1S2, CATALYST_TEMP_B2S1, CATALYST_TEMP_B2S2,
+        THROTTLE_B, THROTTLE_C, ACCEL_PEDAL_E, ACCEL_PEDAL_F, MAF_MAX,
+        EVAP_VAPOR_PRESSURE_ABS, EVAP_VAPOR_PRESSURE_WIDE,
+        SHORT_O2_TRIM_B1, LONG_O2_TRIM_B1, SHORT_O2_TRIM_B2, LONG_O2_TRIM_B2,
+        FUEL_RAIL_PRESSURE_ABS, EMISSION_REQUIREMENTS, EGT_B1S1, EGT_B2S1
     ).sortedBy { it.id }
 
     val byId: Map<Int, ObdPid> = ALL.associateBy { it.id }
@@ -273,6 +467,11 @@ object Pids {
         ENGINE_LOAD.id, ABSOLUTE_LOAD.id, MAF.id, INTAKE_MAP.id, FUEL_RATE.id,
         TIMING_ADVANCE.id, INJECTION_TIMING.id,
         O2_B1S1_VOLTAGE.id, O2_B1S2_VOLTAGE.id, EQUIVALENCE_RATIO.id,
+        O2_B1S3_VOLTAGE.id, O2_B1S4_VOLTAGE.id, O2_B2S1_VOLTAGE.id, O2_B2S2_VOLTAGE.id,
+        O2_B2S3_VOLTAGE.id, O2_B2S4_VOLTAGE.id,
+        LAMBDA_B1S1.id, LAMBDA_B1S2.id, LAMBDA_B2S1.id, LAMBDA_B2S2.id,
+        LAMBDA_WIDE_B1S1.id, LAMBDA_WIDE_B1S2.id, LAMBDA_WIDE_B2S1.id, LAMBDA_WIDE_B2S2.id,
+        THROTTLE_B.id, THROTTLE_C.id, ACCEL_PEDAL_E.id, ACCEL_PEDAL_F.id,
         SHORT_FUEL_TRIM_1.id, SHORT_FUEL_TRIM_2.id,
         DEMANDED_TORQUE.id, ACTUAL_TORQUE.id, FUEL_SYSTEM_STATUS.id,
     )
@@ -280,7 +479,8 @@ object Pids {
     /** PID, которые не меняются на ходу - их достаточно прочитать один раз. */
     val STATIC: Set<Int> = setOf(
         OBD_STANDARD.id, FUEL_TYPE.id, REFERENCE_TORQUE.id, DISTANCE_SINCE_CLEAR.id,
-        WARMUPS_SINCE_CLEAR.id, TIME_SINCE_CLEAR.id, DISTANCE_WITH_MIL.id, TIME_WITH_MIL.id
+        WARMUPS_SINCE_CLEAR.id, TIME_SINCE_CLEAR.id, DISTANCE_WITH_MIL.id, TIME_WITH_MIL.id,
+        MAF_MAX.id, EMISSION_REQUIREMENTS.id, SECONDARY_AIR_STATUS.id, AUX_INPUT_STATUS.id
     )
 }
 

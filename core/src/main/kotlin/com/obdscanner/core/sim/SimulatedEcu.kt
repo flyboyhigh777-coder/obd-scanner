@@ -1,6 +1,7 @@
 package com.obdscanner.core.sim
 
 import com.obdscanner.core.dtc.DtcCodec
+import com.obdscanner.core.monitor.MonitorSupport
 import com.obdscanner.core.obd.PidSupport
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.session.ObdChannel
@@ -212,6 +213,7 @@ class SimulatedEcu(
             0x02 -> respondFreezeFrame(command)
             0x03 -> dtcFrame(0x43, storedDtcs)
             0x04 -> { storedDtcs.clear(); pendingDtcs.clear(); frame(intArrayOf(0x44)) }
+            0x06 -> respondMonitorTests(command)
             0x07 -> dtcFrame(0x47, pendingDtcs)
             0x09 -> respondVehicleInfo(command)
             0x0A -> dtcFrame(0x4A, permanentDtcs)
@@ -315,6 +317,8 @@ class SimulatedEcu(
             0x00 -> frame(intArrayOf(0x49, 0x00, 0x55, 0x40, 0x00, 0x00))
             0x02 -> frame(intArrayOf(0x49, 0x02, 0x01) + vin.map { it.code }.toIntArray())
             0x04 -> frame(intArrayOf(0x49, 0x04, 0x01) + calibrationId.map { it.code }.toIntArray())
+            0x06 -> frame(intArrayOf(0x49, 0x06, 0x01) + CVN)
+            0x08 -> frame(intArrayOf(0x49, 0x08, PERFORMANCE_COUNTERS.size) + performanceBytes())
             0x0A -> frame(intArrayOf(0x49, 0x0A, 0x01) + ecuName.map { it.code }.toIntArray())
             else -> noData()
         }
@@ -329,6 +333,36 @@ class SimulatedEcu(
             body.add(pair.first); body.add(pair.second)
         }
         return frame(body.toIntArray())
+    }
+
+    /**
+     * Результаты бортовых тестов (режим 06).
+     *
+     * Числа подобраны так, чтобы в демо-режиме было видно главное: тест
+     * катализатора банка 1 выходит за верхний предел - и это согласовано с
+     * кодом P0420 в памяти блока. Так на экране видно не "таблицу чисел", а
+     * ответ на вопрос, почему горит лампа.
+     */
+    private fun respondMonitorTests(command: String): String {
+        val mid = command.drop(2).take(2).toIntOrNull(16) ?: return prompt("?\r")
+        if (mid in MonitorSupport.RANGE_MIDS) {
+            if (mid != 0x00 && mid !in supportedMonitorIds) return noData()
+            return frame(intArrayOf(0x46, mid) + MonitorSupport.encode(mid, supportedMonitorIds))
+        }
+        val records = MONITOR_TESTS[mid] ?: return noData()
+        val body = ArrayList<Int>()
+        body.add(0x46)
+        records.forEach { body.addAll(it.toList()) }
+        return frame(body.toIntArray())
+    }
+
+    private fun performanceBytes(): IntArray {
+        val out = ArrayList<Int>()
+        PERFORMANCE_COUNTERS.forEach { value ->
+            out.add((value shr 8) and 0xFF)
+            out.add(value and 0xFF)
+        }
+        return out.toIntArray()
     }
 
     /** Старший байт, младший байт - так ЭБУ передаёт двухбайтные значения. */
@@ -406,6 +440,18 @@ class SimulatedEcu(
         val refuse: Int? = null,
     )
 
+    /**
+     * Какие мониторы режима 06 "умеет" эта виртуальная машина.
+     *
+     * Номера карт (0x20, 0x40, 0x60, 0x80, 0xA0) здесь не лишние: ими ЭБУ
+     * сообщает, что за этой картой есть следующая. Без них перебор карт
+     * остановится на первой, и мониторы пропусков воспламенения (0xA1) никто
+     * не увидит - ровно та ошибка, на которой ловятся и настоящие программы.
+     */
+    val supportedMonitorIds: Set<Int> = setOf(
+        0x01, 0x02, 0x20, 0x21, 0x39, 0x40, 0x60, 0x80, 0xA0, 0xA1
+    )
+
     private companion object {
         /** Широковещательный адрес OBD-II и физический адрес блока двигателя. */
         const val DEFAULT_HEADER = 0x7DF
@@ -436,6 +482,64 @@ class SimulatedEcu(
             }
             return out.toIntArray()
         }
+
+        /** Одна запись режима 06: монитор, тест, единица, значение, пределы. */
+        private fun record(mid: Int, tid: Int, uas: Int, value: Int, min: Int, max: Int) = intArrayOf(
+            mid, tid, uas,
+            (value shr 8) and 0xFF, value and 0xFF,
+            (min shr 8) and 0xFF, min and 0xFF,
+            (max shr 8) and 0xFF, max and 0xFF
+        )
+
+        /**
+         * Результаты тестов по мониторам. Единицы взяты из таблицы стандарта:
+         * 0x10 - миллисекунды, 0x0C - вольты с шагом 0,01, 0x24 - отсчёты,
+         * 0x1A - килопаскали.
+         */
+        val MONITOR_TESTS: Map<Int, List<IntArray>> = mapOf(
+            // Передний лямбда-зонд: времена переключения и крайние напряжения.
+            0x01 to listOf(
+                record(0x01, 0x05, 0x10, 48, 0, 200),
+                record(0x01, 0x06, 0x10, 62, 0, 200),
+                record(0x01, 0x07, 0x0C, 9, 0, 40),
+                record(0x01, 0x08, 0x0C, 86, 60, 110)
+            ),
+            // Задний зонд: по нему и считают эффективность катализатора.
+            0x02 to listOf(
+                record(0x02, 0x07, 0x0C, 31, 0, 45),
+                record(0x02, 0x08, 0x0C, 74, 55, 110)
+            ),
+            // Катализатор банка 1 - вне предела, как и обещает код P0420.
+            0x21 to listOf(record(0x21, 0x80, 0x24, 42, 0, 36)),
+            // Герметичность системы улавливания паров топлива.
+            0x39 to listOf(record(0x39, 0x80, 0x1A, 2, 0, 5)),
+            // Пропуски воспламенения: за прошлые десять циклов и за текущий.
+            0xA1 to listOf(
+                record(0xA1, 0x0B, 0x24, 1, 0, 100),
+                record(0xA1, 0x0C, 0x24, 0, 0, 100)
+            )
+        )
+
+        /**
+         * Счётчики наработки бортовых тестов (режим 09 PID 08) в порядке
+         * стандарта. Видно, что машину недавно сбрасывали: циклов зажигания
+         * много, а завершённых тестов катализатора мало.
+         */
+        val PERFORMANCE_COUNTERS = intArrayOf(
+            120, 160, // OBDCOND, IGNCNTR
+            6, 98,    // катализатор банк 1: завершено / условия
+            0, 0,     // катализатор банк 2 (его нет)
+            74, 96,   // лямбда-зонды банк 1
+            0, 0,     // лямбда-зонды банк 2
+            51, 88,   // EGR/VVT
+            0, 0,     // вторичный воздух
+            12, 44,   // пары топлива
+            70, 96,   // задний зонд банк 1
+            0, 0      // задний зонд банк 2
+        )
+
+        /** Контрольная сумма калибровки - четыре байта, а не текст. */
+        val CVN = intArrayOf(0x5A, 0x3C, 0x11, 0x08)
 
         /** Выдуманные блоки на выдуманных адресах - см. respondModule. */
         val MODULES = mapOf(

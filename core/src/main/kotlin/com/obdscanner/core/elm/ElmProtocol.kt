@@ -24,6 +24,9 @@ enum class ObdProtocol(val elmCode: Char, val ru: String, val en: String) {
     USER1('B', "Пользовательский 1 (CAN 11 бит)", "User 1 (CAN 11 bit)"),
     USER2('C', "Пользовательский 2 (CAN 11 бит)", "User 2 (CAN 11 bit)");
 
+    /** Название на языке приложения - такое же, как у остальных словарей :core. */
+    val title: String get() = ObdText.pick(ru, en)
+
     val isCan: Boolean
         get() = this == ISO15765_11_500 || this == ISO15765_29_500 ||
             this == ISO15765_11_250 || this == ISO15765_29_250 ||
@@ -68,6 +71,44 @@ object Elm {
     const val READ_VOLTAGE = "ATRV"
     const val DEVICE_DESCRIPTION = "ATI"
 
+    /** `AT @1` - как адаптер сам себя называет; у оригинала это "SCANTOOL.NET LLC". */
+    const val DEVICE_IDENTIFIER = "AT@1"
+
+    /** `AT @2` - серийный номер, который производитель прошил в чип. */
+    const val DEVICE_SERIAL = "AT@2"
+
+    /** `AT DP` - протокол словами (`ATDPN` отвечает номером). */
+    const val DESCRIBE_PROTOCOL = "ATDP"
+
+    /** `AT PC` - закрыть протокол: нужно перед сменой протокола вручную. */
+    const val PROTOCOL_CLOSE = "ATPC"
+
+    /** `AT AL` - разрешить длинные (больше 7 байт) сообщения. */
+    const val ALLOW_LONG_MESSAGES = "ATAL"
+
+    /** `ST DI` - версия устройства у чипов STN (OBDLink); у ELM327 ответа нет. */
+    const val STN_DEVICE_INFO = "STDI"
+
+    /** `ST I` - версия прошивки чипа STN. */
+    const val STN_FIRMWARE = "STI"
+
+    /** `ST SN` - серийный номер чипа STN. */
+    const val STN_SERIAL = "STSN"
+
+    /**
+     * `AT CV dddd` - калибровка вольтметра самого адаптера, где dddd это
+     * напряжение, умноженное на 100 (12.45 В -> "1245").
+     *
+     * Клоны ELM327 врут о напряжении на десятые доли вольта, а вся разница
+     * между заряженной и подсаженной батареей - как раз десятые. Поправку
+     * можно держать в приложении, но если её записать в адаптер, он начнёт
+     * отвечать правильно всем программам, и настройка переживёт переустановку.
+     */
+    fun calibrateVoltage(volts: Double): String = "ATCV%04d".format((volts * 100).toInt().coerceIn(0, 9999))
+
+    /** `AT CV 0000` - вернуть заводскую калибровку вольтметра. */
+    const val RESET_VOLTAGE_CALIBRATION = "ATCV0000"
+
     /** `AT ST hh` - таймаут ожидания ответа шины, шаг 4 мс (hh=32 -> ~200 мс). */
     fun timeout(millis: Int): String = "ATST%02X".format((millis / 4).coerceIn(1, 255))
 
@@ -78,6 +119,7 @@ object Elm {
         const val STORED_DTC = 0x03
         const val CLEAR_DTC = 0x04
         const val O2_TESTS = 0x05
+        const val MONITOR_TESTS = 0x06
         const val PENDING_DTC = 0x07
         const val VEHICLE_INFO = 0x09
         const val PERMANENT_DTC = 0x0A
