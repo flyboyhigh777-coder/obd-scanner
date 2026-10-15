@@ -416,10 +416,21 @@ private fun TileSizeMenu(
                 },
                 // Точка у текущего размера, а не галочка: тот же знак, что и
                 // в остальном приложении, и его видно, не приглядываясь.
+                //
+                // Сравниваются колонки, а не сами размеры: на телефоне
+                // "пошире" и "во всю ширину" дают одну и ту же плитку в две
+                // колонки, и если размер выбирали в альбомной ориентации, в
+                // книжной иначе не было бы отмечено вообще ничего.
                 leadingIcon = {
-                    StatusDot(if (size == current) GaugeCyan else Color.Transparent)
+                    val same = size.span(columns) == current.span(columns)
+                    StatusDot(if (same) GaugeCyan else Color.Transparent)
                 },
-                onClick = { onPick(size) }
+                // Выбор того же по виду размера ничего не переписывает: иначе
+                // "во всю ширину", нажатое на телефоне, молча стёрло бы
+                // "пошире", и на магнитоле плитка стала бы шире, чем просили.
+                onClick = {
+                    onPick(if (size.span(columns) == current.span(columns)) current else size)
+                }
             )
         }
     }

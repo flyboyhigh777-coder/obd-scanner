@@ -115,6 +115,52 @@ class DashboardReorderTest {
         assertEquals(before.sorted(), after.sorted())
         // И порядок сохранён: при следующем запуске он будет таким же.
         assertEquals(after, vm.settings.dashboardPids)
+
+        // Вторая перестановка подряд - отдельный случай, и он ломался:
+        // обработчик жеста запускается один раз и держит тот порядок плиток,
+        // что был при запуске. Пока перетаскивание одно, это незаметно.
+        // Теперь на экране [нагрузка, температура, дроссель, ...]; тянем
+        // температуру на ряд вниз, на место температуры воздуха.
+        val throttle = Pids.THROTTLE.id
+        val intake = Pids.INTAKE_TEMP.id
+        assertEquals(
+            "перед второй перестановкой порядок известен: $after",
+            listOf(load, coolant, throttle, intake),
+            after.filter { it == load || it == coolant || it == throttle || it == intake }
+        )
+        compose.onNodeWithText("Температура ОЖ").performTouchInput {
+            down(center)
+            advanceEventTime(900)
+            moveTo(center + Offset(0f, 420f))
+            advanceEventTime(120)
+            moveTo(center + Offset(0f, 440f))
+            advanceEventTime(120)
+            up()
+        }
+        compose.waitForIdle()
+        shot("52_reorder_twice")
+
+        val twice = vm.dashboardPids.value
+        // Поехать должна температура - та, что под пальцем. По старому
+        // порядку на её месте стояла нагрузка, и уезжала бы она.
+        assertTrue(
+            "температура ушла за температуру воздуха: $twice",
+            twice.indexOf(coolant) > twice.indexOf(intake)
+        )
+        assertTrue(
+            "нагрузка осталась впереди дросселя: $twice",
+            twice.indexOf(load) < twice.indexOf(throttle)
+        )
+        assertEquals(before.sorted(), twice.sorted())
+
+        // Касание после перестановок открывает размер той плитки, которой
+        // коснулись, а не той, что стояла на этом месте вначале.
+        compose.onNodeWithText("Нагрузка на двигатель").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Во всю ширину").performClick()
+        compose.waitForIdle()
+        assertEquals(TileSize.FULL, vm.dashboardTileSizes.value[load])
+        assertEquals(null, vm.dashboardTileSizes.value[coolant])
     }
 
     @Test

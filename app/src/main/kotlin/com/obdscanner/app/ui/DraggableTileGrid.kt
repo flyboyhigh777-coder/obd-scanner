@@ -1,12 +1,15 @@
 package com.obdscanner.app.ui
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -14,11 +17,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Сетка плиток, которые можно переставлять пальцем и растягивать.
@@ -60,7 +62,17 @@ fun DraggableTileGrid(
 ) {
     val count = spans.size
     val haptics = LocalHapticFeedback.current
-    val gapPx = with(LocalDensity.current) { gap.toPx() }
+
+    // Жесты живут в корутине, которая запускается один раз на свои ключи и
+    // держит те значения, что были при запуске. Ключи тут - номер плитки,
+    // их число и число колонок; порядок плиток и их ширины в ключи не
+    // годятся (от них зависит сам жест, и перезапускать его посреди
+    // перетаскивания нельзя). Поэтому всё, что меняется под рукой, жест
+    // берёт через rememberUpdatedState - иначе вторая перестановка подряд
+    // двигала бы плитки по первому, давно устаревшему порядку.
+    val latestSpans by rememberUpdatedState(spans)
+    val latestOnMove by rememberUpdatedState(onMove)
+    val latestOnTap by rememberUpdatedState(onTap)
 
     var dragIndex by remember { mutableStateOf<Int?>(null) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -79,7 +91,7 @@ fun DraggableTileGrid(
         cellWidth = cellWidth,
         cellHeight = cellHeight,
         columns = columns,
-        spans = spans
+        spans = latestSpans
     )
 
     val dragging = dragIndex
@@ -122,7 +134,7 @@ fun DraggableTileGrid(
                                     offset = Offset.Zero
                                     if (from != null && to != null && from != to) {
                                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onMove(from, to)
+                                        latestOnMove(from, to)
                                     }
                                 },
                                 onDragCancel = {
@@ -132,14 +144,25 @@ fun DraggableTileGrid(
                             )
                         }
                         .pointerInput(index) {
-                            // Только короткое касание и ровно так, без
-                            // onLongPress: detectTapGestures с обработчиком
-                            // долгого нажатия съедает всё до отпускания пальца
-                            // - вместе с перетаскиванием, которое после того
-                            // же долгого нажатия и начинается. Перетаскивание
-                            // само отменит касание, как только заберёт первое
-                            // движение себе.
-                            detectTapGestures(onTap = { onTap(index) })
+                            // Своё короткое касание вместо detectTapGestures.
+                            // Готовое с обработчиком долгого нажатия съедает
+                            // всё до отпускания пальца - вместе с
+                            // перетаскиванием, которое после того же долгого
+                            // нажатия и начинается; а без обработчика оно
+                            // ждёт отпускания сколько угодно, и плитка,
+                            // которую подержали и положили обратно, не сдвинув
+                            // пальца, открывала меню размера.
+                            //
+                            // Здесь касание живёт ровно до порога долгого
+                            // нажатия: не успел отпустить - это уже не
+                            // касание, а захват плитки, и меню не при чём.
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    waitForUpOrCancellation()
+                                }
+                                if (up != null) latestOnTap(index)
+                            }
                         }
                 ) {
                     tile(index, span, isDragged, target == index && dragging != index)

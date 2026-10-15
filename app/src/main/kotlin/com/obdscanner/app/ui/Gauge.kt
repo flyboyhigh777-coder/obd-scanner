@@ -210,20 +210,26 @@ fun AutoFitValue(
     modifier: Modifier = Modifier,
 ) {
     var size by remember(text.length, baseSize) { mutableStateOf(baseSize) }
-    var measured by remember(text.length, baseSize) { mutableStateOf(false) }
     Text(
         text,
         modifier = modifier,
-        style = style.copy(fontSize = size, lineHeight = size * 1.15f),
+        // Высота строки - по шрифту, а не по формуле от кегля. Формула тут
+        // была (1.15 от размера) и оказалась миной: у шрифта с высокими
+        // выносными строка занимает до полутора кеглей, и заданная высота
+        // получается КОРОЧЕ самих цифр. Compose честно отдаёт измеренную
+        // высоту, цифры рисуются мимо неё, а скруглённый угол панели режет
+        // то, что вылезло, - снизу у цифр пропадает половина. На стоковом
+        // шрифте разница меньше пикселя, поэтому на снимках этого не видно.
+        style = style.copy(fontSize = size, lineHeight = TextUnit.Unspecified),
         color = color,
         maxLines = 1,
         softWrap = false,
+        // Ужимаем на каждой разметке, где строка не влезла, а не только до
+        // первой удачной: плитка меняет ширину (поворот экрана, смена размера
+        // плитки, разделённый экран), и защёлкнутый размер после этого
+        // остался бы прежним - вместе с обрезанным хвостом.
         onTextLayout = { layout ->
-            if (!measured && layout.didOverflowWidth && size > baseSize * MIN_FIT) {
-                size *= FIT_STEP
-            } else {
-                measured = true
-            }
+            if (layout.didOverflowWidth && size > baseSize * MIN_FIT) size *= FIT_STEP
         }
     )
 }

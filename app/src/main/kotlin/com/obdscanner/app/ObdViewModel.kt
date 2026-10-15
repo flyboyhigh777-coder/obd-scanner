@@ -831,6 +831,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         val next = if (id in current) current - id else current + id
         _dashboardPids.value = next
         settings.dashboardPids = next
+        // Убрали параметр с приборки - забыли и его размер. Иначе он вернётся
+        // через полгода растянутым во всю ширину, хотя в этот раз человек об
+        // этом не просил, а в настройках копятся номера того, чего на экране
+        // давно нет.
+        if (id !in next && _dashboardTileSizes.value.containsKey(id)) {
+            setDashboardTileSize(id, TileSize.NORMAL)
+        }
     }
 
     // --- профиль машины ----------------------------------------------------
