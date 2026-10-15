@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /** Заголовок экрана на градиентной "таблетке" - как подсветка приборов. */
@@ -82,17 +85,29 @@ fun Hint(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Строка "название - значение". */
+/**
+ * Строка "название - значение".
+ *
+ * Ширину делит [LabelValue], а не пропорции: при крупном шрифте длинное
+ * название иначе забирает всю строку, и значение переносится по буквам.
+ */
 @Composable
 fun InfoRow(label: String, value: String, valueColor: Color = TextBright) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = valueColor, fontWeight = FontWeight.Medium)
-    }
+    LabelValue(
+        label = {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+        },
+        value = {
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = valueColor,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.End
+            )
+        },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+    )
 }
 
 /**
@@ -102,19 +117,35 @@ fun InfoRow(label: String, value: String, valueColor: Color = TextBright) {
  */
 @Composable
 fun SegmentButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    // Подпись в одну строку и с ограниченным ростом: кнопки стоят в ряд и
+    // делят ширину поровну, поэтому при двойном размере текста "Bluetooth"
+    // переносится и обрезается о фиксированную высоту кнопки.
+    val label = @Composable { color: Color ->
+        Text(
+            text,
+            color = color,
+            fontSize = cappedSp(14f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false
+        )
+    }
     if (selected) {
         Button(
             onClick = onClick,
             modifier = modifier,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = SegmentSelected,
                 contentColor = SegmentSelectedText
             )
-        ) { Text(text) }
+        ) { label(SegmentSelectedText) }
     } else {
-        OutlinedButton(onClick = onClick, modifier = modifier) {
-            Text(text, color = TextBright)
-        }
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+        ) { label(TextBright) }
     }
 }
 

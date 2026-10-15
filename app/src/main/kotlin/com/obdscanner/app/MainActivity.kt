@@ -46,6 +46,8 @@ import com.obdscanner.app.ui.VehicleScreen
 import com.obdscanner.app.ui.theme.Carbon
 import com.obdscanner.app.ui.theme.CarbonDeep
 import com.obdscanner.app.ui.theme.ObdScannerTheme
+import androidx.compose.ui.text.style.TextOverflow
+import com.obdscanner.app.ui.theme.cappedSp
 import com.obdscanner.app.ui.theme.isWideScreen
 import com.obdscanner.app.ui.theme.PanelFill
 import com.obdscanner.app.ui.theme.SegmentSelected
@@ -142,6 +144,29 @@ private val TABS = listOf(
     R.string.tab_vehicle,
 )
 
+/**
+ * Подпись вкладки: одна строка и ограниченный рост.
+ *
+ * При двойном размере текста подпись иначе переносится в три строки поверх
+ * значка и раздувает полосу навигации на треть экрана. Пять подписей делят
+ * ширину телефона поровну - по 72 dp на каждую, - поэтому расти им некуда
+ * вовсе: названия вкладок узнают по значку и месту, а шрифт увеличивают ради
+ * данных.
+ */
+@Composable
+private fun TabLabel(text: String) {
+    // На телефоне пять подписей делят 360 dp - по 72 dp на каждую, и
+    // "Проверка" в них помещается только мелким. На магнитоле ширина
+    // втрое больше, и ужимать подпись незачем: там её читают с вытянутой руки.
+    Text(
+        text,
+        fontSize = cappedSp(if (isWideScreen()) 13f else 10f, maxScale = 1.0f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        softWrap = false
+    )
+}
+
 @Composable
 private fun TabIcon(index: Int) {
     when (index) {
@@ -162,7 +187,7 @@ private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
                 selected = selected == index,
                 onClick = { onSelect(index) },
                 icon = { TabIcon(index) },
-                label = { Text(stringResource(title)) },
+                label = { TabLabel(stringResource(title)) },
                 colors = navColors()
             )
         }
@@ -183,7 +208,7 @@ private fun TabRail(selected: Int, onSelect: (Int) -> Unit) {
                 selected = selected == index,
                 onClick = { onSelect(index) },
                 icon = { TabIcon(index) },
-                label = { Text(stringResource(title)) },
+                label = { TabLabel(stringResource(title)) },
                 colors = railColors()
             )
         }

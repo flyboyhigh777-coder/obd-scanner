@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -123,3 +124,28 @@ private val CAR_SCALE = UiScale(
 @Composable
 @ReadOnlyComposable
 fun uiScale(): UiScale = if (isWideScreen()) CAR_SCALE else PHONE_SCALE
+
+/**
+ * Размер шрифта, который растёт вместе с настройкой, но не бесконечно.
+ *
+ * Нужен служебным подписям - вкладкам внизу и кнопкам-переключателям. Они
+ * короткие, стоят в ряд и делят ширину экрана поровну: когда человек ставит
+ * двойной размер текста, подпись "Приборы" перестаёт помещаться в пятую часть
+ * экрана и переносится в три строки поверх значка, а "Bluetooth" на кнопке
+ * обрезается на полуслове.
+ *
+ * Содержимое экранов при этом растёт как просили - ограничивается только
+ * обрамление. Это не самоуправство: размер текста увеличивают, чтобы читать
+ * данные, а не названия вкладок, которые и так узнают по значку и месту.
+ *
+ * Считается через плотность: текст в sp система сама умножает на масштаб
+ * шрифта, поэтому чтобы получить нужный предел, масштаб надо из размера
+ * поделить обратно.
+ */
+@Composable
+@ReadOnlyComposable
+fun cappedSp(baseSp: Float, maxScale: Float = 1.3f): TextUnit {
+    val scale = LocalDensity.current.fontScale
+    if (scale <= maxScale || scale <= 0f) return baseSp.sp
+    return (baseSp * maxScale / scale).sp
+}

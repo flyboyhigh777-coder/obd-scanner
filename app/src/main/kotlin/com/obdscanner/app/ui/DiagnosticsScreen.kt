@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import androidx.compose.ui.text.style.TextOverflow
+import com.obdscanner.app.ui.theme.cappedSp
 import com.obdscanner.app.ui.theme.CirclePlum
 import com.obdscanner.app.ui.theme.CircleSage
 import com.obdscanner.app.ui.theme.CircleSlate
@@ -100,9 +102,23 @@ private fun BackBar(title: String, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Одна строка и ограниченный рост: это обрамление, а не данные, и при
+        // крупном шрифте оно иначе занимает пол-экрана над самим разделом.
         Text("‹", style = MaterialTheme.typography.headlineSmall, color = TextMuted)
-        Text(stringResource(R.string.diag_back), style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-        Text("· $title", style = MaterialTheme.typography.bodyMedium, color = TextBright)
+        Text(
+            stringResource(R.string.diag_back),
+            fontSize = cappedSp(14f, maxScale = 1.15f),
+            color = TextMuted,
+            maxLines = 1,
+            softWrap = false
+        )
+        Text(
+            "· $title",
+            fontSize = cappedSp(14f, maxScale = 1.15f),
+            color = TextBright,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

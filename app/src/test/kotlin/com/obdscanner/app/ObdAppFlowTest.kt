@@ -245,7 +245,7 @@ class ObdAppFlowTest {
         shot("13_trip_exported")
 
         // Разгон: тот же поток данных, другой раздел.
-        compose.onNodeWithText("Разгон").performClick()
+        compose.onNodeWithText("Разгон").performScrollTo().performClick()
         compose.waitForIdle()
         shot("14_performance")
         // Сами замеры привязаны ко времени (виртуальная машина первые секунды
@@ -259,7 +259,7 @@ class ObdAppFlowTest {
         // моменту оно уже есть. Виртуальный мотор работает, значит сеть держит
         // генератор - и оценка должна быть именно про генератор, а не про
         // заряд батареи: это главная развилка во всей логике.
-        compose.onNodeWithText("Батарея").performClick()
+        compose.onNodeWithText("Батарея").performScrollTo().performClick()
         compose.waitForIdle()
         pumpUntil(20_000, "напряжение бортовой сети") { vm.battery.value.volts != null }
         val volts = vm.battery.value.volts!!

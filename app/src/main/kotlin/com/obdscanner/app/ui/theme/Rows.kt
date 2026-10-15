@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -188,28 +189,39 @@ fun MenuRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         StatusCircle(if (enabled) circleColor else CircleSlate, glyph)
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (enabled) TextBright else TextDim,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = uiScale().hint),
-                color = TextMuted
-            )
-        }
-        if (state != null) {
-            Text(
-                state,
-                style = MaterialTheme.typography.bodyMedium,
-                color = stateColor,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.End
-            )
-        }
+        // Название с описанием и состояние делят ширину замером: при крупном
+        // шрифте состояние иначе сжимается в столбик по одной букве.
+        LabelValue(
+            label = {
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (enabled) TextBright else TextDim,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = uiScale().hint),
+                        color = TextMuted
+                    )
+                }
+            },
+            value = {
+                if (state != null) {
+                    Text(
+                        state,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = stateColor,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.End
+                    )
+                } else {
+                    EmptyCell()
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
         Chevron()
     }
 }
@@ -249,11 +261,60 @@ fun MeasureRow(
                 )
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 46.dp)) {
-            MeasureCell(labels.first, min ?: "—", Modifier.weight(1f), TextMuted)
-            MeasureCell(labels.second, value, Modifier.weight(1f), valueColor, bold = true)
-            MeasureCell(labels.third, max ?: "—", Modifier.weight(1f), TextMuted)
-            MeasureCell("", unit.ifEmpty { "—" }, Modifier.weight(0.8f), TextMuted)
+        // Четыре колонки держатся, пока шрифт обычный. С увеличенным на
+        // колонку остаётся четверть ширины телефона, и числа начинают
+        // переноситься по цифрам - тогда то же самое выкладывается строками.
+        val dense = LocalDensity.current.fontScale > 1.25f
+        val withUnit = { number: String ->
+            if (unit.isEmpty() || number == "—") number else "$number $unit"
+        }
+        if (dense) {
+            Column(Modifier.fillMaxWidth().padding(top = 6.dp, start = 46.dp)) {
+                LabelValue(
+                    label = { Text(labels.second, style = MaterialTheme.typography.bodyMedium, color = TextDim) },
+                    value = {
+                        Text(
+                            withUnit(value),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = valueColor,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.End
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LabelValue(
+                    label = { Text(labels.first, style = MaterialTheme.typography.bodySmall, color = TextDim) },
+                    value = {
+                        Text(
+                            withUnit(min ?: "—"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            textAlign = TextAlign.End
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LabelValue(
+                    label = { Text(labels.third, style = MaterialTheme.typography.bodySmall, color = TextDim) },
+                    value = {
+                        Text(
+                            withUnit(max ?: "—"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            textAlign = TextAlign.End
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 46.dp)) {
+                MeasureCell(labels.first, min ?: "—", Modifier.weight(1f), TextMuted)
+                MeasureCell(labels.second, value, Modifier.weight(1f), valueColor, bold = true)
+                MeasureCell(labels.third, max ?: "—", Modifier.weight(1f), TextMuted)
+                MeasureCell("", unit.ifEmpty { "—" }, Modifier.weight(0.8f), TextMuted)
+            }
         }
         if (position != null) {
             LimitBar(position, valueColor, Modifier.padding(top = 6.dp, start = 46.dp))
@@ -308,31 +369,32 @@ fun LimitBar(position: Double, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** Строка "параметр - значение - единица" с крупным значением акцентом. */
+/**
+ * Строка "параметр - значение - единица" с крупным значением акцентом.
+ *
+ * Ширину делит [LabelValue]: при крупном шрифте значение уходит под название
+ * целиком, а не переносится по буквам.
+ */
 @Composable
 fun ValueRow(title: String, value: String, unit: String = "", valueColor: Color = GaugeCyan) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextMuted,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.titleMedium,
-            color = valueColor,
-            fontWeight = FontWeight.SemiBold
-        )
-        if (unit.isNotEmpty()) {
-            Text(
-                " $unit",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextDim
-            )
-        }
-    }
+    LabelValue(
+        label = {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+        },
+        value = {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = valueColor,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End
+                )
+                if (unit.isNotEmpty()) {
+                    Text(" $unit", style = MaterialTheme.typography.bodySmall, color = TextDim)
+                }
+            }
+        },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)
+    )
 }
