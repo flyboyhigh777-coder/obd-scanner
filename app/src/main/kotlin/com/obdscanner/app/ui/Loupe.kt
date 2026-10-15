@@ -75,7 +75,10 @@ fun LoupeArea(
     val lens = with(density) {
         DpSize(
             width = LoupePlacement.lensWidth(area.width.toDp().value).dp,
-            height = LoupePlacement.lensHeight(area.height.toDp().value).dp
+            height = LoupePlacement.lensHeight(
+                areaWidth = area.width.toDp().value,
+                areaHeight = area.height.toDp().value
+            ).dp
         )
     }
 
@@ -229,15 +232,12 @@ object LoupePlacement {
     /**
      * Размер стекла - от размера экрана, а не числом из кода.
      *
-     * Увеличение 2,2 означает, что в стекло влезает кусок экрана в 2,2 раза
-     * меньше его самого: стекло в треть экрана показывает седьмую часть
-     * строки - два слова и обрыв. Поэтому оно почти во всю ширину: строку
-     * целиком при таком увеличении не показать никак, но чем шире стекло,
-     * тем меньше приходится возить пальцем.
-     *
-     * Сверху всё же ограничено: на широком экране магнитолы стекло во всю
-     * ширину закрыло бы собой то, ради чего в него смотрят, - понимание,
-     * где ты на странице.
+     * Во всю ширину его делать не надо: стекло, закрывающее экран от края до
+     * края, прячет то, ради чего в него смотрят, - понимание, где ты на
+     * странице. Строку целиком при увеличении 2,2 всё равно не показать
+     * никак (для этого стекло должно быть вдвое шире экрана), так что гнаться
+     * за шириной бессмысленно - важно, чтобы в него влезало несколько слов
+     * сразу и не приходилось возить пальцем по букве.
      */
     fun lensWidth(areaWidth: Float): Float {
         // Первый кадр: экран ещё не измерен. Нулевое стекло система не
@@ -247,18 +247,25 @@ object LoupePlacement {
         return min(areaWidth * WIDTH_SHARE, MAX_WIDTH).coerceAtLeast(min(MIN_WIDTH, areaWidth))
     }
 
-    fun lensHeight(areaHeight: Float): Float {
-        if (areaHeight <= 0f) return MIN_HEIGHT
-        return min(areaHeight * HEIGHT_SHARE, MAX_HEIGHT).coerceAtLeast(min(MIN_HEIGHT, areaHeight))
+    /**
+     * Высота - от ширины, а не от высоты экрана: стекло вытянутое, под строку
+     * текста, и на лежачем экране магнитолы оно должно остаться таким же, а
+     * не сплющиться вместе с экраном. Ограничение по высоте экрана - только
+     * чтобы на совсем низком стекло не заняло его целиком.
+     */
+    fun lensHeight(areaWidth: Float, areaHeight: Float): Float {
+        val byWidth = lensWidth(areaWidth) * HEIGHT_RATIO
+        if (areaHeight <= 0f) return byWidth
+        return min(byWidth, areaHeight * MAX_HEIGHT_SHARE).coerceAtLeast(min(MIN_HEIGHT, areaHeight))
     }
 
     /** Доли и пределы - в тех же единицах, что и площадь (у нас это dp). */
-    private const val WIDTH_SHARE = 0.92f
-    private const val HEIGHT_SHARE = 0.3f
+    private const val WIDTH_SHARE = 0.8f
+    private const val HEIGHT_RATIO = 0.4f
+    private const val MAX_HEIGHT_SHARE = 0.3f
     private const val MIN_WIDTH = 220f
     private const val MIN_HEIGHT = 90f
-    private const val MAX_WIDTH = 460f
-    private const val MAX_HEIGHT = 170f
+    private const val MAX_WIDTH = 380f
 }
 
 /** Во сколько раз увеличивать. Больше трёх - видно пиксели, меньше двух - незачем. */

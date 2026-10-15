@@ -73,18 +73,22 @@ class LoupePlacementTest {
     }
 
     @Test
-    /** размер стекла - от экрана: на телефоне почти во всю ширину. */
-    fun lensGrowsWithTheScreen() {
-        // Телефон 411 x 891 dp.
-        assertEquals(411f * 0.92f, LoupePlacement.lensWidth(411f), 0.5f)
-        assertEquals(170f, LoupePlacement.lensHeight(891f), 0.5f)
-        // Магнитола 1000 x 600 dp: шире предела стекло не растёт, иначе
-        // закроет собой страницу целиком.
-        assertEquals(460f, LoupePlacement.lensWidth(1000f), 0.5f)
-        assertEquals(170f, LoupePlacement.lensHeight(600f), 0.5f)
-        // Совсем узкая область - стекло не шире её самой.
+    /** размер стекла - от экрана, но не во всю его ширину. */
+    fun lensGrowsWithTheScreenButNotToItsEdges() {
+        // Телефон 411 x 891 dp: заметно больше прежних 280 x 104, но по
+        // краям остаётся страница - иначе непонятно, где ты на ней.
+        assertEquals(329f, LoupePlacement.lensWidth(411f), 1f)
+        assertEquals(132f, LoupePlacement.lensHeight(411f, 891f), 1f)
+        assertTrue("не во всю ширину", LoupePlacement.lensWidth(411f) < 411f * 0.85f)
+
+        // Магнитола 1000 x 600 dp: шире предела стекло не растёт.
+        assertEquals(380f, LoupePlacement.lensWidth(1000f), 1f)
+        // И не сплющивается на лежачем экране: высота считается от ширины.
+        assertEquals(152f, LoupePlacement.lensHeight(1000f, 600f), 1f)
+
+        // Совсем узкая и низкая область - стекло не больше её самой.
         assertTrue("не шире экрана", LoupePlacement.lensWidth(120f) <= 120f)
-        assertTrue("не выше экрана", LoupePlacement.lensHeight(60f) <= 60f)
+        assertTrue("не выше экрана", LoupePlacement.lensHeight(400f, 60f) <= 60f)
     }
 
     @Test
@@ -97,7 +101,7 @@ class LoupePlacementTest {
      */
     fun lensIsNeverEmptyBeforeTheFirstLayout() {
         assertTrue("ширина до замера", LoupePlacement.lensWidth(0f) > 0f)
-        assertTrue("высота до замера", LoupePlacement.lensHeight(0f) > 0f)
+        assertTrue("высота до замера", LoupePlacement.lensHeight(0f, 0f) > 0f)
     }
 
     @Test
