@@ -287,6 +287,8 @@ data class QuickCheckState(
     val step: QuickCheckStep? = null,
     val report: QuickCheckReport? = null,
     val exportedUri: Uri? = null,
+    /** Чем делиться: у PDF и у текста разный тип, и подставлять чужой нельзя. */
+    val exportedMime: String? = null,
 )
 
 /** Что за адаптер в разъёме и какие команды он действительно понимает. */
@@ -725,13 +727,27 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         quickCheckStop = true
     }
 
-    /** Отчёт текстовым файлом - его отдают в сервис или прикладывают к переписке. */
-    fun exportQuickCheck(onDone: (ExportResult) -> Unit) {
+    /**
+     * Отчёт файлом - его отдают в сервис или прикладывают к переписке.
+     *
+     * PDF по умолчанию: текст на телефоне открывать нечем, и отправленный в
+     * мессенджер .txt получатель открывает браузером, который для локального
+     * файла угадывает кодировку и для кириллицы угадывает неверно.
+     */
+    fun exportQuickCheck(asPdf: Boolean, onDone: (ExportResult) -> Unit) {
         val report = _quickCheck.value.report ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val result = ReportExport.save(getApplication(), report.toText())
+            val app = getApplication<Application>()
+            val result = if (asPdf) {
+                ReportExport.savePdf(app, report.blocks(), app.getString(R.string.app_name))
+            } else {
+                ReportExport.saveText(app, report.toText())
+            }
             withContext(Dispatchers.Main) {
-                _quickCheck.value = _quickCheck.value.copy(exportedUri = result.uri)
+                _quickCheck.value = _quickCheck.value.copy(
+                    exportedUri = result.uri,
+                    exportedMime = if (asPdf) ReportExport.MIME_PDF else ReportExport.MIME_TEXT,
+                )
                 onDone(result)
             }
         }
@@ -1493,7 +1509,14 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             ObdTask.ReadTests -> runTestsRead(session)
 
             ObdTask.QuickCheckRun -> {
-                val report = QuickCheck(session, withMonitorTests = settings.quickCheckMonitorTests)
+                val report = QuickCheck(
+                    session,
+                    withMonitorTests = settings.quickCheckMonitorTests,
+                    // Если адаптер уже проверяли, его описание попадёт в отчёт;
+                    // повторять проверку внутри полной нельзя - она на
+                    // несколько секунд уводит адаптер в другое состояние.
+                    adapterInfo = _adapter.value.info,
+                )
                     .run(
                         onStep = { step ->
                             _quickCheck.value = _quickCheck.value.copy(step = step)

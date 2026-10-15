@@ -327,8 +327,14 @@ class ObdAppFlowTest {
         assertTrue("отчёт читается", report.toText().contains("ОТЧЁТ ДИАГНОСТИКИ"))
         shot("22_tests_quick_check")
 
-        compose.onNodeWithText("Сохранить отчёт").performScrollTo().performClick()
+        // Сохранение: PDF рисуется средствами платформы, которых под
+        // Robolectric нет (PdfDocument без нативной части), поэтому здесь
+        // проверяется текстовый путь - он тот же до самой записи файла.
+        // Раскладка PDF закрыта отдельными тестами в :core.
+        compose.onNodeWithText("Сохранить PDF").performScrollTo().assertExists()
+        compose.onNodeWithText("Текстом").performScrollTo().performClick()
         pumpUntil(20_000, "выгрузка отчёта") { vm.quickCheck.value.exportedUri != null }
+        assertEquals("text/plain", vm.quickCheck.value.exportedMime)
         shot("23_tests_report_saved")
 
         // Меню диагностики не просто открывает разделы - оно показывает, есть

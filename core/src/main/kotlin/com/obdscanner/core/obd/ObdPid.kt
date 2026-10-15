@@ -519,6 +519,46 @@ object FuelType {
     fun isDiesel(code: Int): Boolean = code == 4 || code == 19
 }
 
+/**
+ * Статус топливной системы из PID 0x03.
+ *
+ * Это не число, а битовая маска, и показывать её числом бессмысленно: "2" в
+ * отчёте не говорит ничего, а "замкнутый контур" говорит главное - работает ли
+ * обратная связь по лямбда-зонду. Открытый контур на прогретом двигателе в
+ * спокойной езде означает, что ЭБУ зонду больше не верит.
+ */
+object FuelSystemStatus {
+    private val NAMES: Map<Int, Pair<String, String>> = mapOf(
+        1 to (
+            "Открытый контур (двигатель не прогрет)"
+                to "Open loop (engine not warm yet)"
+            ),
+        2 to (
+            "Замкнутый контур (по лямбда-зонду)"
+                to "Closed loop (using oxygen sensor)"
+            ),
+        4 to (
+            "Открытый контур из-за режима (полный газ, торможение двигателем)"
+                to "Open loop due to driving conditions"
+            ),
+        8 to (
+            "Открытый контур из-за неисправности"
+                to "Open loop due to a detected fault"
+            ),
+        16 to (
+            "Замкнутый контур, но один из зондов неисправен"
+                to "Closed loop, but one oxygen sensor is faulty"
+            )
+    )
+
+    /** null - блок прислал ноль: топливной системы с этим номером в машине нет. */
+    fun name(code: Int): String? {
+        if (code == 0) return null
+        NAMES[code]?.let { return ObdText.pick(it.first, it.second) }
+        return ObdText.pick("Неизвестный статус ($code)", "Unknown status ($code)")
+    }
+}
+
 /** Стандарт OBD из PID 0x1C - полезен, чтобы понять, чего вообще ждать от машины. */
 object ObdStandard {
     private val NAMES: Map<Int, Pair<String, String>> = mapOf(

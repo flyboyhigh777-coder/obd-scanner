@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
@@ -44,6 +43,8 @@ import com.obdscanner.app.ui.theme.RowGlyph
 import com.obdscanner.app.ui.theme.TextBright
 import com.obdscanner.app.ui.theme.TextMuted
 import com.obdscanner.app.ui.theme.ValueRow
+import com.obdscanner.core.diag.ReportBlock
+import com.obdscanner.core.diag.ReportTone
 import com.obdscanner.core.monitor.MonitorTest
 
 /**
@@ -126,51 +127,90 @@ fun QuickCheckPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
             )
             report.skipped.forEach { Hint(it) }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        viewModel.exportQuickCheck { result ->
-                            message = context.getString(
-                                when {
-                                    !result.success -> R.string.tests_quick_save_failed
-                                    result.inDownloads -> R.string.tests_quick_saved_downloads
-                                    else -> R.string.tests_quick_saved_cache
-                                }
-                            )
+            // Сохранение: PDF первым и шире - он открывается на телефоне и
+            // печатается, а текст нужен тем, кто вставляет отчёт в сообщение.
+            val save = { asPdf: Boolean ->
+                viewModel.exportQuickCheck(asPdf) { result ->
+                    message = context.getString(
+                        when {
+                            !result.success -> R.string.tests_quick_save_failed
+                            result.inDownloads -> R.string.tests_quick_saved_downloads
+                            else -> R.string.tests_quick_saved_cache
                         }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text(stringResource(R.string.tests_quick_save)) }
-
-                val uri = state.exportedUri
-                OutlinedButton(
-                    onClick = {
-                        if (uri != null) {
-                            context.startActivity(
-                                Intent.createChooser(
-                                    ReportExport.shareIntent(uri),
-                                    context.getString(R.string.tests_quick_share)
-                                )
-                            )
-                        }
-                    },
-                    enabled = uri != null,
-                    modifier = Modifier.weight(1f)
-                ) { Text(stringResource(R.string.tests_quick_share), color = TextBright) }
+                    )
+                }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { save(true) }, modifier = Modifier.weight(1.4f)) {
+                    Text(stringResource(R.string.tests_quick_save_pdf))
+                }
+                OutlinedButton(onClick = { save(false) }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.tests_quick_save_text), color = TextBright)
+                }
+            }
+
+            val uri = state.exportedUri
+            OutlinedButton(
+                onClick = {
+                    if (uri != null) {
+                        context.startActivity(
+                            Intent.createChooser(
+                                ReportExport.shareIntent(uri, state.exportedMime ?: ReportExport.MIME_PDF),
+                                context.getString(R.string.tests_quick_share)
+                            )
+                        )
+                    }
+                },
+                enabled = uri != null,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.tests_quick_share), color = TextBright) }
             message?.let { Hint(it) }
         }
 
         Panel {
             PanelTitle(stringResource(R.string.tests_quick_report))
-            // Отчёт целиком - его и читают, и копируют в переписку. Шрифт
-            // равноширинный: в нём колонки отчёта стоят колонками.
-            Text(
-                report.toText(),
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                color = TextMuted
-            )
+            // Отчёт строками интерфейса, а не одним куском текста: кусок текста
+            // приходится набирать мелким, чтобы в него влезали строки целиком,
+            // и на телефоне он нечитаем - а ошибки смотрят именно здесь.
+            report.blocks().forEach { block -> ReportBlockRow(block) }
         }
+    }
+}
+
+/** Одна строка отчёта на экране. Цвет берётся из самого отчёта, а не угадывается. */
+@Composable
+private fun ReportBlockRow(block: ReportBlock) {
+    val color = { tone: ReportTone ->
+        when (tone) {
+            ReportTone.PLAIN -> TextBright
+            ReportTone.GOOD -> GaugeGreen
+            ReportTone.WARN -> GaugeAmber
+            ReportTone.BAD -> GaugeRed
+        }
+    }
+    when (block) {
+        is ReportBlock.Title -> {
+            Text(block.text, style = MaterialTheme.typography.titleMedium, color = TextBright)
+            if (block.subtitle.isNotEmpty()) Hint(block.subtitle)
+        }
+
+        is ReportBlock.Section -> Text(
+            block.text,
+            style = MaterialTheme.typography.titleSmall,
+            color = TextMuted,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+
+        is ReportBlock.Row -> InfoRow(block.label, block.value, color(block.tone))
+
+        is ReportBlock.Note -> Text(
+            block.text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (block.tone == ReportTone.PLAIN) TextMuted else color(block.tone),
+            modifier = Modifier.padding(start = 12.dp, bottom = 2.dp)
+        )
+
+        ReportBlock.Space -> Unit
     }
 }
 

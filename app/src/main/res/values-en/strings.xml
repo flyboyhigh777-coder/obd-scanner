@@ -337,7 +337,7 @@
     <!-- On-board test results: modes 05, 06 and performance counters -->
     <string name="tests_not_connected">Not connected — connect on the \"Link\" tab. Demo mode works too: the virtual vehicle answers these services exactly like a real one.</string>
     <string name="tests_quick_title">Full check</string>
-    <string name="tests_quick_hint">Reads everything that can be read and puts it into one report: protocol and adapter, VIN, calibration ID and its verification number, MIL and trouble codes from all three services, monitor readiness, freeze frame, on-board test results and their performance counters. Nothing is written to the ECU. The report is saved as a text file you can hand to a garage or attach to a sale listing.</string>
+    <string name="tests_quick_hint">Reads everything that can be read and puts it into one report: protocol and adapter, VIN, calibration ID and its verification number, MIL and trouble codes from all three services, monitor readiness, freeze frame, on-board test results and their performance counters. Nothing is written to the ECU. The report is saved as a PDF you can hand to a garage, attach to a sale listing or print. A text version is there too, for pasting the report straight into a message.</string>
     <string name="tests_quick_mode06">Read on-board test results (mode 06)</string>
     <string name="tests_quick_mode06_hint">This is the slow part: one request per monitor, and a vehicle with two banks can have more than twenty. Without it the check takes seconds.</string>
     <string name="tests_quick_run">Check everything</string>
@@ -345,7 +345,6 @@
     <string name="tests_quick_verdict">Verdict</string>
     <string name="tests_quick_codes">Trouble codes</string>
     <string name="tests_quick_failed">Tests out of limits</string>
-    <string name="tests_quick_save">Save report</string>
     <string name="tests_quick_share">Share</string>
     <string name="tests_quick_saved_downloads">Report saved to Downloads/ObdScanner</string>
     <string name="tests_quick_saved_cache">Report saved inside the app — send it with \"Share\"</string>
@@ -437,4 +436,6 @@
     <string name="tests_limit_min_short">min</string>
     <string name="tests_limit_max_short">max</string>
     <string name="tests_value_short">value</string>
+    <string name="tests_quick_save_pdf">Save PDF</string>
+    <string name="tests_quick_save_text">As text</string>
 </resources>

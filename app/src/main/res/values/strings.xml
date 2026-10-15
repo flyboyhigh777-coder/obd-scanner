@@ -350,7 +350,7 @@
     <!-- Бортовые тесты: режимы 05, 06 и счётчики наработки -->
     <string name="tests_not_connected">Нет связи с машиной — подключитесь на вкладке «Связь». Демо-режим тоже подойдёт: виртуальная машина отвечает на эти режимы так же, как настоящая.</string>
     <string name="tests_quick_title">Полная проверка</string>
-    <string name="tests_quick_hint">Читает всё, что можно прочитать, и складывает в один отчёт: протокол и адаптер, VIN, номер и контрольную сумму калибровки, лампу и ошибки по всем трём режимам, готовность бортовых тестов, стоп-кадр, результаты самодиагностик и счётчики их наработки. Ничего не записывает в блок. Отчёт сохраняется текстовым файлом — его можно отдать в сервис или приложить к объявлению о продаже.</string>
+    <string name="tests_quick_hint">Читает всё, что можно прочитать, и складывает в один отчёт: протокол и адаптер, VIN, номер и контрольную сумму калибровки, лампу и ошибки по всем трём режимам, готовность бортовых тестов, стоп-кадр, результаты самодиагностик и счётчики их наработки. Ничего не записывает в блок. Отчёт сохраняется файлом PDF — его можно отдать в сервис, приложить к объявлению о продаже или распечатать. Текстом он тоже сохраняется: это для тех, кому отчёт нужно вставить прямо в сообщение.</string>
     <string name="tests_quick_mode06">Опрашивать результаты тестов (режим 06)</string>
     <string name="tests_quick_mode06_hint">Это самая долгая часть: запрос на каждый монитор, а их у машины с двумя банками бывает больше двадцати. Без неё проверка занимает секунды.</string>
     <string name="tests_quick_run">Проверить всё</string>
@@ -358,7 +358,6 @@
     <string name="tests_quick_verdict">Вывод</string>
     <string name="tests_quick_codes">Кодов неисправностей</string>
     <string name="tests_quick_failed">Тестов вне пределов</string>
-    <string name="tests_quick_save">Сохранить отчёт</string>
     <string name="tests_quick_share">Поделиться</string>
     <string name="tests_quick_saved_downloads">Отчёт сохранён в «Загрузки/ObdScanner»</string>
     <string name="tests_quick_saved_cache">Отчёт сохранён в памяти приложения — отправьте его кнопкой «Поделиться»</string>
@@ -450,4 +449,6 @@
     <string name="tests_limit_min_short">мин</string>
     <string name="tests_limit_max_short">макс</string>
     <string name="tests_value_short">значение</string>
+    <string name="tests_quick_save_pdf">Сохранить PDF</string>
+    <string name="tests_quick_save_text">Текстом</string>
 </resources>

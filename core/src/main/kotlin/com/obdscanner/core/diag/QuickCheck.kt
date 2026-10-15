@@ -7,6 +7,7 @@ import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.elm.ObdText
 import com.obdscanner.core.monitor.MonitorTest
 import com.obdscanner.core.obd.InUsePerformance
+import com.obdscanner.core.obd.FuelSystemStatus
 import com.obdscanner.core.obd.MonitorStatus
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.obd.VinDecoder
@@ -41,6 +42,8 @@ enum class QuickCheckStep(val ru: String, val en: String) {
 data class QuickCheckReport(
     val startedAtMillis: Long,
     val adapter: AdapterInfo? = null,
+    /** Как адаптер представился при сбросе - на случай, если проверку не делали. */
+    val adapterId: String = "",
     val protocol: ObdProtocol? = null,
     val adapterVoltage: Double? = null,
     val vin: String? = null,
@@ -96,21 +99,51 @@ data class QuickCheckReport(
         }
 
     /** Отчёт текстом - его и отдают в сервис или прикладывают к переписке. */
-    fun toText(): String = buildString {
+    /**
+     * Отчёт разобранными блоками: заголовок, разделы, строки.
+     *
+     * Так он существует в одном виде, а показывается в двух - текстом и
+     * страницами PDF. Отрисовывать отчёт дважды, по разу на формат, значит
+     * однажды поправить одно и забыть другое: в PDF появится то, чего нет в
+     * тексте, и наоборот.
+     */
+    fun blocks(): List<ReportBlock> {
         val ru = ObdText.russian
-        appendLine(if (ru) "ОТЧЁТ ДИАГНОСТИКИ OBD-II" else "OBD-II DIAGNOSTIC REPORT")
-        appendLine("=".repeat(32))
-        appendLine()
-        appendLine(if (ru) "Вывод: $verdict" else "Verdict: $verdict")
-        appendLine()
+        val noData = ObdText.pick("нет данных", "no data")
+        val out = ArrayList<ReportBlock>()
+
+        fun row(label: String, value: String?, tone: ReportTone = ReportTone.PLAIN) {
+            out.add(ReportBlock.Row(label, value?.takeIf { it.isNotBlank() } ?: noData, tone))
+        }
+
+        fun section(title: String) {
+            out.add(ReportBlock.Space)
+            out.add(ReportBlock.Section(title))
+        }
+
+        out.add(
+            ReportBlock.Title(
+                if (ru) "ОТЧЁТ ДИАГНОСТИКИ OBD-II" else "OBD-II DIAGNOSTIC REPORT",
+                subtitle = listOfNotNull(timestampText(), vin).joinToString(" · ")
+            )
+        )
+        out.add(
+            ReportBlock.Row(
+                if (ru) "Вывод" else "Verdict",
+                verdict,
+                if (dtcTotal > 0 || failedTests.isNotEmpty()) ReportTone.BAD else ReportTone.GOOD
+            )
+        )
 
         section(if (ru) "Связь" else "Connection")
         row(if (ru) "Протокол" else "Protocol", protocol?.title)
-        row(if (ru) "Адаптер" else "Adapter", adapter?.description)
-        row(if (ru) "Тип чипа" else "Chip", adapter?.chip?.title)
-        row(if (ru) "Напряжение на разъёме" else "Socket voltage", adapterVoltage?.let { "%.1f В".format(it) })
+        row(if (ru) "Адаптер" else "Adapter", adapterName)
+        adapter?.let { row(if (ru) "Тип чипа" else "Chip", it.chip.title) }
+        row(
+            if (ru) "Напряжение на разъёме" else "Socket voltage",
+            adapterVoltage?.let { "%.1f %s".format(it, ObdText.pick("В", "V")) }
+        )
         row(if (ru) "Параметров поддерживается" else "Supported parameters", supportedPidCount.toString())
-        appendLine()
 
         section(if (ru) "Автомобиль" else "Vehicle")
         row("VIN", vin)
@@ -121,13 +154,13 @@ data class QuickCheckReport(
         row(if (ru) "Блок управления" else "ECU name", ecuName)
         calibrationIds.forEachIndexed { i, id -> row("CALID ${i + 1}", id) }
         calibrationVerificationNumbers.forEachIndexed { i, cvn -> row("CVN ${i + 1}", cvn) }
-        appendLine()
 
         section(if (ru) "Лампа и ошибки" else "MIL and trouble codes")
         monitorStatus?.let {
             row(
                 if (ru) "Check Engine" else "MIL",
-                if (it.milOn) (if (ru) "горит" else "on") else (if (ru) "не горит" else "off")
+                if (it.milOn) (if (ru) "горит" else "on") else (if (ru) "не горит" else "off"),
+                if (it.milOn) ReportTone.BAD else ReportTone.GOOD
             )
             row(if (ru) "Кодов в памяти блока" else "Codes in ECU", it.dtcCount.toString())
             row(
@@ -137,18 +170,21 @@ data class QuickCheckReport(
             )
         }
         listOf(
-            (if (ru) "Сохранённые" else "Stored") to stored,
-            (if (ru) "Ожидающие подтверждения" else "Pending") to pending,
-            (if (ru) "Постоянные" else "Permanent") to permanent
-        ).forEach { (title, codes) ->
-            appendLine("  $title: ${if (codes.isEmpty()) (if (ru) "нет" else "none") else codes.size.toString()}")
-            codes.forEach { appendLine("    ${it.code} - ${it.description}") }
+            Triple(if (ru) "Сохранённые" else "Stored", stored, ReportTone.BAD),
+            Triple(if (ru) "Ожидающие подтверждения" else "Pending", pending, ReportTone.WARN),
+            Triple(if (ru) "Постоянные" else "Permanent", permanent, ReportTone.BAD)
+        ).forEach { (title, codes, tone) ->
+            row(
+                title,
+                if (codes.isEmpty()) (if (ru) "нет" else "none") else codes.size.toString(),
+                if (codes.isEmpty()) ReportTone.GOOD else tone
+            )
+            codes.forEach { out.add(ReportBlock.Note("${it.code} - ${it.description}", tone)) }
         }
-        appendLine()
 
         section(if (ru) "Готовность бортовых тестов" else "Monitor readiness")
         if (monitorStatus == null) {
-            appendLine(if (ru) "  нет данных" else "  no data")
+            out.add(ReportBlock.Note(noData))
         } else {
             monitorStatus.monitors.forEach { monitor ->
                 val state = when {
@@ -156,68 +192,131 @@ data class QuickCheckReport(
                     monitor.complete -> if (ru) "завершён" else "complete"
                     else -> if (ru) "НЕ завершён" else "NOT complete"
                 }
-                appendLine("  ${ObdText.pick(monitor.ru, monitor.en)}: $state")
+                row(
+                    ObdText.pick(monitor.ru, monitor.en),
+                    state,
+                    when {
+                        !monitor.supported -> ReportTone.PLAIN
+                        monitor.complete -> ReportTone.GOOD
+                        else -> ReportTone.WARN
+                    }
+                )
             }
         }
-        appendLine()
 
         if (freezeFrameDtc != null || freezeFrame.isNotEmpty()) {
             section(if (ru) "Стоп-кадр" else "Freeze frame")
             row(if (ru) "Код, записавший кадр" else "DTC that caused it", freezeFrameDtc)
-            freezeFrame.forEach { (id, value) ->
-                val pid = Pids.byId[id] ?: return@forEach
-                appendLine("  ${pid.title}: ${pid.format(value)} ${pid.unit.label}".trimEnd())
-            }
-            appendLine()
+            freezeFrame.forEach { (id, value) -> row(pidLabel(id), pidValue(id, value)) }
         }
 
         if (monitorTests.isNotEmpty()) {
             section(if (ru) "Результаты бортовых тестов (режим 06)" else "On-board test results (mode 06)")
             monitorTests.forEach { test ->
+                val tone = when (test.passed) {
+                    true -> ReportTone.GOOD
+                    false -> ReportTone.BAD
+                    null -> ReportTone.PLAIN
+                }
                 val mark = when (test.passed) {
                     true -> if (ru) "норма" else "pass"
                     false -> if (ru) "ВНЕ ПРЕДЕЛОВ" else "FAIL"
                     null -> if (ru) "пределы не заданы" else "no limits"
                 }
+                row("${test.title} / ${test.testTitle}", "${test.formatValue()} - $mark", tone)
                 val limits = listOfNotNull(
                     test.formatMin()?.let { (if (ru) "мин " else "min ") + it },
                     test.formatMax()?.let { (if (ru) "макс " else "max ") + it }
-                ).joinToString(", ")
-                appendLine("  ${test.title} / ${test.testTitle}")
-                appendLine("    ${test.formatValue()} ($limits) - $mark")
+                ).joinToString(" · ")
+                if (limits.isNotEmpty()) out.add(ReportBlock.Note(limits, tone))
             }
-            appendLine()
         }
 
         performance?.let { ipt ->
             section(if (ru) "Счётчики наработки тестов" else "In-use performance")
-            ipt.counters.forEach { appendLine("  ${it.title}: ${it.value}") }
-            appendLine()
+            ipt.obdConditions?.let {
+                row(if (ru) "Циклов, пригодных для диагностики" else "OBD monitoring conditions", it.toString())
+            }
+            ipt.ignitionCycles?.let {
+                row(if (ru) "Циклов зажигания" else "Ignition cycles", it.toString())
+            }
+            // Парами, а не по одному счётчику в строке: само по себе число
+            // "завершено: 6" ни о чём не говорит, смысл - в его отношении к
+            // числу случаев, когда условия для теста вообще складывались.
+            ipt.pairs.forEach { pair ->
+                val ratio = pair.ratio
+                row(
+                    pair.title,
+                    if (ratio == null) {
+                        if (ru) "условий не было" else "no conditions yet"
+                    } else {
+                        "${pair.completed.value} ${if (ru) "из" else "of"} ${pair.conditions.value}" +
+                            " (${(ratio * 100).toInt()} %)"
+                    },
+                    // 0,336 - порог, ниже которого бортовая диагностика
+                    // считается неработающей по европейским правилам.
+                    if (ratio != null && ratio < 0.336) ReportTone.WARN else ReportTone.PLAIN
+                )
+            }
         }
 
         if (live.isNotEmpty()) {
             section(if (ru) "Текущие параметры" else "Live data")
-            live.forEach { (id, value) ->
-                val pid = Pids.byId[id] ?: return@forEach
-                appendLine("  ${pid.title}: ${pid.format(value)} ${pid.unit.label}".trimEnd())
-            }
-            appendLine()
+            live.forEach { (id, value) -> row(pidLabel(id), pidValue(id, value)) }
         }
 
         if (skipped.isNotEmpty()) {
             section(if (ru) "Не прочитано" else "Not read")
-            skipped.forEach { appendLine("  $it") }
-            appendLine()
+            skipped.forEach { out.add(ReportBlock.Note(it)) }
         }
+        return out
     }
 
-    private fun StringBuilder.section(title: String) {
-        appendLine(title)
-        appendLine("-".repeat(title.length))
+    /** Название адаптера: из проверки, а если её не делали - из ответа на сброс. */
+    private val adapterName: String?
+        get() = adapter?.description?.takeIf { it.isNotBlank() } ?: adapterId
+
+    private fun pidLabel(id: Int): String = Pids.byId[id]?.title ?: "PID %02X".format(id)
+
+    /**
+     * Значение параметра для отчёта. Статус топливной системы - не число, а
+     * битовая маска: "2" в отчёте не говорит ничего, "замкнутый контур" -
+     * говорит главное.
+     */
+    private fun pidValue(id: Int, value: Double): String {
+        if (id == Pids.FUEL_SYSTEM_STATUS.id) {
+            FuelSystemStatus.name(value.toInt())?.let { return it }
+        }
+        val pid = Pids.byId[id] ?: return value.toString()
+        return "${pid.format(value)} ${pid.unit.label}".trim()
     }
 
-    private fun StringBuilder.row(title: String, value: String?) {
-        appendLine("  $title: ${value?.takeIf { it.isNotBlank() } ?: ObdText.pick("нет данных", "no data")}")
+    private fun timestampText(): String? = runCatching {
+        java.time.Instant.ofEpochMilli(startedAtMillis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+    }.getOrNull()
+
+    /** Отчёт текстом - его отдают в сервис или прикладывают к переписке. */
+    fun toText(): String = buildString {
+        for (block in blocks()) {
+            when (block) {
+                is ReportBlock.Title -> {
+                    appendLine(block.text)
+                    appendLine("=".repeat(32))
+                    if (block.subtitle.isNotEmpty()) appendLine(block.subtitle)
+                }
+
+                is ReportBlock.Section -> {
+                    appendLine(block.text)
+                    appendLine("-".repeat(block.text.length))
+                }
+
+                is ReportBlock.Row -> appendLine("  ${block.label}: ${block.value}")
+                is ReportBlock.Note -> appendLine("    ${block.text}")
+                ReportBlock.Space -> appendLine()
+            }
+        }
     }
 }
 
@@ -236,6 +335,14 @@ data class QuickCheckReport(
 class QuickCheck(
     private val session: ObdSession,
     private val withMonitorTests: Boolean = true,
+    /**
+     * Готовый результат проверки адаптера, если её уже делали.
+     *
+     * Повторять её внутри полной проверки нельзя: она задаёт свой заголовок
+     * запроса и фильтр приёма, то есть на несколько секунд переводит адаптер в
+     * состояние, в котором машину спрашивать нельзя.
+     */
+    private val adapterInfo: AdapterInfo? = null,
     private val now: () -> Long = { System.currentTimeMillis() }
 ) {
 
@@ -248,6 +355,8 @@ class QuickCheck(
 
         onStep(QuickCheckStep.ADAPTER)
         report = report.copy(
+            adapter = adapterInfo,
+            adapterId = session.adapterId,
             protocol = session.protocol,
             adapterVoltage = session.adapterVoltage(),
             supportedPidCount = session.supportedPids.size
