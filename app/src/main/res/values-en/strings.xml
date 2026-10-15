@@ -438,4 +438,5 @@
     <string name="tests_value_short">value</string>
     <string name="tests_quick_save_pdf">Save PDF</string>
     <string name="tests_quick_save_text">As text</string>
+    <string name="dash_reorder_hint">Tiles can be rearranged: press and hold a tile, then drag it onto a neighbour. The order is saved.</string>
 </resources>

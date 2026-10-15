@@ -451,4 +451,5 @@
     <string name="tests_value_short">значение</string>
     <string name="tests_quick_save_pdf">Сохранить PDF</string>
     <string name="tests_quick_save_text">Текстом</string>
+    <string name="dash_reorder_hint">Плитки можно переставить: удержите плитку и перетащите её на место соседней. Порядок сохраняется.</string>
 </resources>

@@ -786,6 +786,25 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         _protocol.value = protocol
     }
 
+    /**
+     * Переставить плитку приборки: [fromId] встаёт на место [toId].
+     *
+     * Принимаются номера параметров, а не их места на экране. На экране
+     * показывается не весь список: обороты и скорость вынесены в большие
+     * шкалы, а параметры, которых машина не отдаёт, можно и вовсе убрать, -
+     * поэтому третья плитка на экране и третья запись в настройках это разные
+     * вещи, и переставлять по номеру места значило бы иногда менять не ту.
+     */
+    fun moveDashboardPid(fromId: Int, toId: Int) {
+        val order = _dashboardPids.value.toMutableList()
+        val from = order.indexOf(fromId)
+        val to = order.indexOf(toId)
+        if (from < 0 || to < 0 || from == to) return
+        order.add(to, order.removeAt(from))
+        settings.dashboardPids = order
+        _dashboardPids.value = order
+    }
+
     fun toggleDashboardPid(id: Int) {
         val current = _dashboardPids.value
         val next = if (id in current) current - id else current + id

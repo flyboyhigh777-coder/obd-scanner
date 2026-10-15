@@ -1,5 +1,8 @@
 package com.obdscanner.app.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,46 +172,65 @@ fun DashboardScreen(viewModel: ObdViewModel) {
             Hint(stringResource(R.string.dash_gear_learning, performance.learnedGears))
         }
 
-        // Остальные выбранные параметры - по две плитки в ряд: больше на телефоне
-        // не влезает так, чтобы цифры читались на ходу.
-        selected
+        // Остальные выбранные параметры - плитками. Сколько в ряд, решает ширина
+        // экрана: на магнитоле влезает четыре, и цифры остаются читаемыми с
+        // водительского места.
+        //
+        // Порядок плиток переставляется пальцем: долгое нажатие - и плитка
+        // едет за пальцем. Порядок у каждого свой - кому-то первой нужна
+        // температура, кому-то напряжение, - и угадать его за человека нельзя.
+        val tiles = selected
             .filter { it != Pids.RPM.id && it != Pids.SPEED.id }
             .mapNotNull { Pids.byId[it] }
-            // Сколько плиток в ряд - по ширине экрана: на магнитоле их влезает
-            // четыре, и цифры при этом остаются читаемыми с водительского места.
-            .chunked(columns)
-            .forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(scale.screenGap)) {
-                    row.forEach { pid ->
-                        val value = live.values[pid.id]
-                        // Голый прочерк не отличает "ещё не пришло" от "машина
-                        // такого не умеет", а разница существенная: во втором
-                        // случае плитку надо просто убрать.
-                        val text = when {
-                            value != null -> Format.value(pid, value, units)
-                            pid.id in live.unanswered -> stringResource(R.string.dash_no_answer)
-                            else -> dash
-                        }
-                        if (style == "BAR") {
-                            BarGauge(
-                                title = pid.title,
-                                valueText = text,
-                                fraction = value?.let { fractionFor(pid, it, units, profile) },
-                                accent = alertColor(alertFor(pid, value)),
-                                modifier = Modifier.weight(1f)
-                            )
-                        } else {
-                            ValueTile(
-                                title = pid.title,
-                                valueText = text,
-                                modifier = Modifier.weight(1f),
-                                alert = alertFor(pid, value)
-                            )
-                        }
+
+        if (tiles.isNotEmpty()) {
+            DraggableTileGrid(
+                count = tiles.size,
+                columns = columns,
+                gap = scale.screenGap,
+                onMove = { from, to ->
+                    viewModel.moveDashboardPid(tiles[from].id, tiles[to].id)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { index, dragged, isTarget ->
+                val pid = tiles[index]
+                val value = live.values[pid.id]
+                // Голый прочерк не отличает "ещё не пришло" от "машина такого
+                // не умеет", а разница существенная: во втором случае плитку
+                // надо просто убрать.
+                val text = when {
+                    value != null -> Format.value(pid, value, units)
+                    pid.id in live.unanswered -> stringResource(R.string.dash_no_answer)
+                    else -> dash
+                }
+                // Ячейка, в которую плитка встанет, обводится - на ходу надо
+                // видеть, куда кладёшь, не разглядывая.
+                val slot = if (isTarget) {
+                    Modifier.border(2.dp, GaugeCyan, RoundedCornerShape(18.dp))
+                } else {
+                    Modifier
+                }
+                Box(slot.alpha(if (dragged) 0.92f else 1f)) {
+                    if (style == "BAR") {
+                        BarGauge(
+                            title = pid.title,
+                            valueText = text,
+                            fraction = value?.let { fractionFor(pid, it, units, profile) },
+                            accent = alertColor(alertFor(pid, value)),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        ValueTile(
+                            title = pid.title,
+                            valueText = text,
+                            modifier = Modifier.fillMaxWidth(),
+                            alert = alertFor(pid, value)
+                        )
                     }
-                    if (row.size == 1) Box(Modifier.weight(1f))
                 }
             }
+            Hint(stringResource(R.string.dash_reorder_hint))
+        }
 
         // Свои параметры показываются отдельным блоком: их добавлял человек, и
         // путать их со стандартными не надо.
