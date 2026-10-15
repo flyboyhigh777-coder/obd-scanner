@@ -20,6 +20,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
@@ -68,6 +69,16 @@ fun LoupeArea(
     var area by remember { mutableStateOf(IntSize.Zero) }
     val latestEnabled by rememberUpdatedState(enabled)
 
+    // Размер стекла - от размера экрана: на телефоне почти во всю ширину, на
+    // магнитоле не больше предела, иначе оно закроет собой всю страницу.
+    val density = LocalDensity.current
+    val lens = with(density) {
+        DpSize(
+            width = LoupePlacement.lensWidth(area.width.toDp().value).dp,
+            height = LoupePlacement.lensHeight(area.height.toDp().value).dp
+        )
+    }
+
     Box(
         modifier
             .onSizeChanged { area = it }
@@ -91,14 +102,14 @@ fun LoupeArea(
                             sourceY = finger.y,
                             areaWidth = area.width.toFloat(),
                             areaHeight = area.height.toFloat(),
-                            lensWidth = LENS_WIDTH.toPx(),
-                            lensHeight = LENS_HEIGHT.toPx(),
+                            lensWidth = lens.width.toPx(),
+                            lensHeight = lens.height.toPx(),
                             gap = LENS_GAP.toPx()
                         )
                     }
                 },
                 zoom = LENS_ZOOM,
-                size = DpSize(LENS_WIDTH, LENS_HEIGHT),
+                size = lens,
                 cornerRadius = 20.dp,
                 elevation = 10.dp
             ),
@@ -214,17 +225,44 @@ object LoupePlacement {
         }
         return Offset(x, y)
     }
+
+    /**
+     * Размер стекла - от размера экрана, а не числом из кода.
+     *
+     * Увеличение 2,2 означает, что в стекло влезает кусок экрана в 2,2 раза
+     * меньше его самого: стекло в треть экрана показывает седьмую часть
+     * строки - два слова и обрыв. Поэтому оно почти во всю ширину: строку
+     * целиком при таком увеличении не показать никак, но чем шире стекло,
+     * тем меньше приходится возить пальцем.
+     *
+     * Сверху всё же ограничено: на широком экране магнитолы стекло во всю
+     * ширину закрыло бы собой то, ради чего в него смотрят, - понимание,
+     * где ты на странице.
+     */
+    fun lensWidth(areaWidth: Float): Float {
+        // Первый кадр: экран ещё не измерен. Нулевое стекло система не
+        // принимает (Magnifier.Builder требует положительный размер) и роняет
+        // приложение, поэтому до замера берём наименьшее разумное.
+        if (areaWidth <= 0f) return MIN_WIDTH
+        return min(areaWidth * WIDTH_SHARE, MAX_WIDTH).coerceAtLeast(min(MIN_WIDTH, areaWidth))
+    }
+
+    fun lensHeight(areaHeight: Float): Float {
+        if (areaHeight <= 0f) return MIN_HEIGHT
+        return min(areaHeight * HEIGHT_SHARE, MAX_HEIGHT).coerceAtLeast(min(MIN_HEIGHT, areaHeight))
+    }
+
+    /** Доли и пределы - в тех же единицах, что и площадь (у нас это dp). */
+    private const val WIDTH_SHARE = 0.92f
+    private const val HEIGHT_SHARE = 0.3f
+    private const val MIN_WIDTH = 220f
+    private const val MIN_HEIGHT = 90f
+    private const val MAX_WIDTH = 460f
+    private const val MAX_HEIGHT = 170f
 }
 
 /** Во сколько раз увеличивать. Больше трёх - видно пиксели, меньше двух - незачем. */
 private const val LENS_ZOOM = 2.2f
-
-/**
- * Лупа широкая и низкая, а не круглая: смотрят в неё строку текста, а круг
- * показывает два слова и отрезает остальное.
- */
-private val LENS_WIDTH = 280.dp
-private val LENS_HEIGHT = 104.dp
 
 /** Насколько поднять её над пальцем, чтобы он не загораживал строку. */
 private val LENS_GAP = 36.dp

@@ -73,6 +73,34 @@ class LoupePlacementTest {
     }
 
     @Test
+    /** размер стекла - от экрана: на телефоне почти во всю ширину. */
+    fun lensGrowsWithTheScreen() {
+        // Телефон 411 x 891 dp.
+        assertEquals(411f * 0.92f, LoupePlacement.lensWidth(411f), 0.5f)
+        assertEquals(170f, LoupePlacement.lensHeight(891f), 0.5f)
+        // Магнитола 1000 x 600 dp: шире предела стекло не растёт, иначе
+        // закроет собой страницу целиком.
+        assertEquals(460f, LoupePlacement.lensWidth(1000f), 0.5f)
+        assertEquals(170f, LoupePlacement.lensHeight(600f), 0.5f)
+        // Совсем узкая область - стекло не шире её самой.
+        assertTrue("не шире экрана", LoupePlacement.lensWidth(120f) <= 120f)
+        assertTrue("не выше экрана", LoupePlacement.lensHeight(60f) <= 60f)
+    }
+
+    @Test
+    /**
+     * До первого замера экрана размер всё равно положительный.
+     *
+     * Нулевое стекло система не принимает: Magnifier.Builder.setSize роняет
+     * приложение на "Width should be positive". А нулевой размер экрана - не
+     * выдумка, это обычный первый кадр, до того как разметка померила себя.
+     */
+    fun lensIsNeverEmptyBeforeTheFirstLayout() {
+        assertTrue("ширина до замера", LoupePlacement.lensWidth(0f) > 0f)
+        assertTrue("высота до замера", LoupePlacement.lensHeight(0f) > 0f)
+    }
+
+    @Test
     /** лупа шире экрана - ставим по центру, а не прижимаем к краю. */
     fun centersWhenWiderThanTheScreen() {
         val center = LoupePlacement.lensCenter(
