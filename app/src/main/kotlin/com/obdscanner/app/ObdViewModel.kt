@@ -44,6 +44,7 @@ import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.FuelEconomy
 import com.obdscanner.core.obd.FuelType
 import com.obdscanner.core.obd.MonitorStatus
+import com.obdscanner.app.ui.TileSize
 import com.obdscanner.core.obd.ObdPid
 import com.obdscanner.core.obd.PidScan
 import com.obdscanner.core.obd.Pids
@@ -395,6 +396,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _dashboardPids = MutableStateFlow(settings.dashboardPids)
     val dashboardPids: StateFlow<List<Int>> = _dashboardPids.asStateFlow()
+
+    /** Ширина плиток приборки. Чего в карте нет - то обычного размера. */
+    private val _dashboardTileSizes = MutableStateFlow(
+        settings.dashboardTileSizes.mapValues { TileSize.of(it.value) }
+    )
+    val dashboardTileSizes: StateFlow<Map<Int, TileSize>> = _dashboardTileSizes.asStateFlow()
 
     private val _units = MutableStateFlow(settings.units)
     val units: StateFlow<UnitSystem> = _units.asStateFlow()
@@ -803,6 +810,20 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         order.add(to, order.removeAt(from))
         settings.dashboardPids = order
         _dashboardPids.value = order
+    }
+
+    /**
+     * Задать размер плитки.
+     *
+     * Обычный размер из настроек вычёркивается, а не записывается: так в них
+     * лежит ровно то, что человек менял, и набор размеров не разрастается
+     * вместе со списком параметров.
+     */
+    fun setDashboardTileSize(pidId: Int, size: TileSize) {
+        val next = _dashboardTileSizes.value.toMutableMap()
+        if (size == TileSize.NORMAL) next.remove(pidId) else next[pidId] = size
+        _dashboardTileSizes.value = next
+        settings.dashboardTileSizes = next.mapValues { it.value.code }
     }
 
     fun toggleDashboardPid(id: Int) {

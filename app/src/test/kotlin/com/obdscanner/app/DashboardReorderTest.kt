@@ -4,6 +4,8 @@ import android.os.Looper
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
@@ -11,6 +13,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
+import com.obdscanner.app.ui.TileSize
 import com.obdscanner.core.obd.Pids
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,6 +44,15 @@ class DashboardReorderTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     private val outDir = File("build/outputs/roborazzi").apply { mkdirs() }
+
+    /**
+     * Снимок со всеми окнами сразу - меню выбора размера живёт в своём окне
+     * поверх экрана, и обычный снимок корня его не захватывает.
+     */
+    private fun screenShot(name: String) {
+        compose.waitForIdle()
+        captureScreenRoboImage(File(outDir, "$name.png").path)
+    }
 
     private fun shot(name: String) {
         compose.waitForIdle()
@@ -102,5 +115,45 @@ class DashboardReorderTest {
         assertEquals(before.sorted(), after.sorted())
         // И порядок сохранён: при следующем запуске он будет таким же.
         assertEquals(after, vm.settings.dashboardPids)
+    }
+
+    @Test
+    fun tapPicksTileSize() {
+        val vm = ViewModelProvider(compose.activity)[ObdViewModel::class.java]
+
+        compose.onNodeWithText("Демо").performClick()
+        compose.onNodeWithText("Подключиться").performClick()
+        pumpUntil(30_000, "связь") { vm.connection.value is ConnectionState.Connected }
+
+        compose.onAllNodesWithText("Приборы").onLast().performClick()
+        pumpUntil(20_000, "первые данные") { vm.live.value.hasData }
+
+        val coolant = Pids.COOLANT_TEMP.id
+        assertEquals(TileSize.NORMAL, vm.dashboardTileSizes.value[coolant] ?: TileSize.NORMAL)
+
+        // Короткое касание плитки - выбор её размера там же, где она лежит.
+        compose.onNodeWithText("Температура ОЖ").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Размер плитки").assertExists()
+        // На телефоне выбор из двух: "пошире" и "во всю ширину" в две колонки
+        // это одно и то же.
+        compose.onAllNodesWithText("Пошире").assertCountEquals(0)
+        screenShot("52_tile_size_menu")
+
+        compose.onNodeWithText("Во всю ширину").performClick()
+        compose.waitForIdle()
+        shot("53_tile_size_full")
+
+        assertEquals(TileSize.FULL, vm.dashboardTileSizes.value[coolant])
+        // И размер переживёт перезапуск - он лёг в настройки.
+        assertEquals(TileSize.FULL.code, vm.settings.dashboardTileSizes[coolant])
+
+        // Обратно - и запись из настроек убирается, а не остаётся "обычной".
+        compose.onNodeWithText("Температура ОЖ").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Обычная").performClick()
+        compose.waitForIdle()
+        assertEquals(null, vm.dashboardTileSizes.value[coolant])
+        assertEquals(null, vm.settings.dashboardTileSizes[coolant])
     }
 }

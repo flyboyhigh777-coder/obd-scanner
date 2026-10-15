@@ -438,5 +438,9 @@
     <string name="tests_value_short">value</string>
     <string name="tests_quick_save_pdf">Save PDF</string>
     <string name="tests_quick_save_text">As text</string>
-    <string name="dash_reorder_hint">Tiles can be rearranged: press and hold a tile, then drag it onto a neighbour. The order is saved.</string>
+    <string name="dash_reorder_hint">Tiles follow your finger: press and hold one to drag it onto a neighbour, or tap it to choose its width. Order and sizes are saved.</string>
+    <string name="dash_tile_size_title">Tile size</string>
+    <string name="dash_tile_size_normal">Normal</string>
+    <string name="dash_tile_size_wide">Wider</string>
+    <string name="dash_tile_size_full">Full width</string>
 </resources>

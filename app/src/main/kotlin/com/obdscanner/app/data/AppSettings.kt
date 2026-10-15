@@ -242,6 +242,28 @@ class AppSettings(context: Context) {
         }
         set(value) = prefs.edit().putString(KEY_DASH, value.joinToString(",")).apply()
 
+    /**
+     * Ширина плиток на приборке: номер параметра - код размера.
+     *
+     * Хранятся только те, которым размер меняли: плиток под сотню, а
+     * растягивают одну-две, и записывать для остальных "обычная" значило бы
+     * хранить список, который ничего не говорит.
+     */
+    var dashboardTileSizes: Map<Int, Int>
+        get() {
+            val raw = prefs.getString(KEY_DASH_SIZES, null) ?: return emptyMap()
+            return raw.split(',').mapNotNull { part ->
+                val pair = part.split(':')
+                if (pair.size != 2) return@mapNotNull null
+                val pid = pair[0].trim().toIntOrNull() ?: return@mapNotNull null
+                val code = pair[1].trim().toIntOrNull() ?: return@mapNotNull null
+                pid to code
+            }.toMap()
+        }
+        set(value) = prefs.edit()
+            .putString(KEY_DASH_SIZES, value.entries.joinToString(",") { "${it.key}:${it.value}" })
+            .apply()
+
     private companion object {
         const val KEY_SHOW_GEAR = "show_gear"
         const val KEY_SHOW_RANGE = "show_range"
@@ -254,6 +276,7 @@ class AppSettings(context: Context) {
         const val KEY_LAST_BT = "last_bluetooth"
         const val KEY_LAST_SOURCE = "last_source"
         const val KEY_DASH = "dashboard_pids"
+        const val KEY_DASH_SIZES = "dashboard_tile_sizes"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"
         const val KEY_VOLTAGE_OFFSET = "voltage_offset"
         const val KEY_BATTERY_AH = "battery_ah"

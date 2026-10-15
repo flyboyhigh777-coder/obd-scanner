@@ -1,6 +1,7 @@
 package com.obdscanner.app.ui
 
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,13 +21,18 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 
 /**
- * Сетка плиток, которые можно переставлять пальцем.
+ * Сетка плиток, которые можно переставлять пальцем и растягивать.
  *
  * Берётся плитка долгим нажатием, а не обычным: по приборке водят пальцем,
  * прокручивая её, и короткое касание обязано оставаться прокруткой. Долгое
  * нажатие - то же самое, чем переставляют значки на рабочем столе телефона,
  * так что объяснять его не нужно; в момент захвата телефон коротко вибрирует,
  * чтобы это было понятно, не приглядываясь.
+ *
+ * Короткое касание освободилось - им и выбирается размер плитки. Настройка
+ * размера живёт там же, где сама плитка, а не в отдельном списке галочек:
+ * решение "эту хочу видеть крупно" принимают, глядя на приборку, а не на
+ * список названий.
  *
  * Плитка едет за пальцем, а ячейка, в которую она встанет, подсвечивается.
  * Соседи при этом не прыгают с места на место: на ходу от шевелящейся сетки
@@ -35,26 +41,36 @@ import androidx.compose.ui.unit.Dp
  * Своя раскладка, а не ряды: во-первых, так известен точный размер ячейки -
  * из него и считается, куда плитка переедет; во-вторых, все плитки оказываются
  * соседями в одной раскладке, и перетаскиваемую можно поднять **над**
- * остальными. В рядах она уезжала бы под плитки следующего ряда.
+ * остальными. В рядах она уезжала бы под плитки следующего ряда. В-третьих,
+ * плитка шире одной колонки в обычный ряд просто не укладывается.
+ *
+ * @param spans ширина каждой плитки в колонках.
+ * @param onMove плитку перенесли на другое место.
+ * @param onTap по плитке коротко нажали - показать выбор размера.
  */
 @Composable
 fun DraggableTileGrid(
-    count: Int,
+    spans: List<Int>,
     columns: Int,
     gap: Dp,
     onMove: (from: Int, to: Int) -> Unit,
     modifier: Modifier = Modifier,
-    tile: @Composable (index: Int, dragged: Boolean, isTarget: Boolean) -> Unit
+    onTap: (index: Int) -> Unit = {},
+    tile: @Composable (index: Int, span: Int, dragged: Boolean, isTarget: Boolean) -> Unit
 ) {
+    val count = spans.size
     val haptics = LocalHapticFeedback.current
     val gapPx = with(LocalDensity.current) { gap.toPx() }
 
     var dragIndex by remember { mutableStateOf<Int?>(null) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    // Размер ячейки вместе с промежутком - замеряется по первой плитке:
-    // сетка равномерная, остальные такие же.
+    // Ширина одной колонки и высота ряда вместе с промежутками - из них
+    // считается, куда плитка переедет. Замеряются по готовой раскладке, а не
+    // вычисляются отдельно: так в счёт идёт та же ширина, что на экране.
     var cellWidth by remember { mutableStateOf(0f) }
     var cellHeight by remember { mutableStateOf(0f) }
+
+    val cells = remember(spans, columns) { TileReorder.pack(spans, columns) }
 
     fun targetOf(from: Int): Int = TileReorder.targetIndex(
         from = from,
@@ -63,7 +79,7 @@ fun DraggableTileGrid(
         cellWidth = cellWidth,
         cellHeight = cellHeight,
         columns = columns,
-        count = count
+        spans = spans
     )
 
     val dragging = dragIndex
@@ -74,14 +90,9 @@ fun DraggableTileGrid(
         content = {
             repeat(count) { index ->
                 val isDragged = dragging == index
+                val span = cells.getOrNull(index)?.span ?: 1
                 Box(
                     Modifier
-                        .onSizeChanged {
-                            if (index == 0) {
-                                cellWidth = it.width + gapPx
-                                cellHeight = it.height + gapPx
-                            }
-                        }
                         .graphicsLayer {
                             if (isDragged) {
                                 translationX = offset.x
@@ -120,8 +131,18 @@ fun DraggableTileGrid(
                                 }
                             )
                         }
+                        .pointerInput(index) {
+                            // Только короткое касание и ровно так, без
+                            // onLongPress: detectTapGestures с обработчиком
+                            // долгого нажатия съедает всё до отпускания пальца
+                            // - вместе с перетаскиванием, которое после того
+                            // же долгого нажатия и начинается. Перетаскивание
+                            // само отменит касание, как только заберёт первое
+                            // движение себе.
+                            detectTapGestures(onTap = { onTap(index) })
+                        }
                 ) {
-                    tile(index, isDragged, target == index && dragging != index)
+                    tile(index, span, isDragged, target == index && dragging != index)
                 }
             }
         }
@@ -129,18 +150,31 @@ fun DraggableTileGrid(
         if (measurables.isEmpty() || columns <= 0) return@Layout layout(0, 0) {}
         val gapRound = gap.roundToPx()
         val width = constraints.maxWidth
-        val cell = ((width - gapRound * (columns - 1)) / columns).coerceAtLeast(1)
-        val placeables = measurables.map { it.measure(Constraints.fixedWidth(cell)) }
-        val rowHeight = placeables.maxOf { it.height }
-        val rows = (placeables.size + columns - 1) / columns
+        val column = ((width - gapRound * (columns - 1)) / columns).coerceAtLeast(1)
+        fun widthOf(span: Int) = column * span + gapRound * (span - 1)
+
+        // Высота у всех плиток одна - по самой высокой. Сначала спрашиваем
+        // высоту, потом меряем с ней же: иначе широкая плитка с крупными
+        // цифрами оказывается выше соседней, нижние края в ряду расходятся, и
+        // сетка выглядит кривой. Ряды одинаковые ещё и потому, что из них
+        // считается перетаскивание.
+        val widths = measurables.indices.map { widthOf(cells.getOrNull(it)?.span ?: 1) }
+        val rowHeight = measurables
+            .mapIndexed { index, measurable -> measurable.maxIntrinsicHeight(widths[index]) }
+            .maxOrNull() ?: 0
+        val placeables = measurables.mapIndexed { index, measurable ->
+            measurable.measure(Constraints.fixed(widths[index], rowHeight))
+        }
+        val rows = TileReorder.rows(cells.take(placeables.size))
         val height = rows * rowHeight + (rows - 1).coerceAtLeast(0) * gapRound
+        cellWidth = (column + gapRound).toFloat()
+        cellHeight = (rowHeight + gapRound).toFloat()
         layout(width, height) {
             placeables.forEachIndexed { index, placeable ->
-                val column = index % columns
-                val row = index / columns
+                val cell = cells.getOrNull(index) ?: return@forEachIndexed
                 placeable.placeRelative(
-                    x = column * (cell + gapRound),
-                    y = row * (rowHeight + gapRound),
+                    x = cell.column * (column + gapRound),
+                    y = cell.row * (rowHeight + gapRound),
                     // Перетаскиваемая плитка рисуется поверх соседних.
                     zIndex = if (index == dragging) 1f else 0f
                 )

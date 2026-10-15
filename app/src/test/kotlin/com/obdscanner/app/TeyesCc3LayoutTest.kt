@@ -11,6 +11,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.obdscanner.app.ui.TileSize
+import com.obdscanner.core.obd.Pids
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -91,6 +93,22 @@ class TeyesCc3LayoutTest {
             .fetchSemanticsNodes().size
         assertTrue("панель расхода на экране", moving + idle > 0)
         shot("31_teyes_dashboard")
+
+        // Плитки разной ширины: на магнитоле колонок три, и "пошире" здесь -
+        // не то же самое, что "во всю ширину". Ряд из широкой и обычной, а
+        // под ним - растянутая на весь ряд: если бы раскладка ломалась на
+        // смешанных ширинах, сломалась бы именно здесь.
+        vm.setDashboardTileSize(Pids.COOLANT_TEMP.id, TileSize.WIDE)
+        vm.setDashboardTileSize(Pids.ENGINE_LOAD.id, TileSize.FULL)
+        compose.waitForIdle()
+        // Экран магнитолы низкий: плитки лежат ниже сгиба, и без прокрутки на
+        // снимке была бы одна шкала оборотов.
+        compose.onNodeWithText("Нагрузка на двигатель").performScrollTo()
+        shot("34_teyes_tile_sizes")
+        compose.onNodeWithText("Температура ОЖ").assertExists()
+        vm.setDashboardTileSize(Pids.COOLANT_TEMP.id, TileSize.NORMAL)
+        vm.setDashboardTileSize(Pids.ENGINE_LOAD.id, TileSize.NORMAL)
+        compose.waitForIdle()
 
         // Ошибки лежат внутри меню диагностики: сначала вкладка, потом пункт.
         compose.onAllNodesWithText("Проверка").onLast().performClick()

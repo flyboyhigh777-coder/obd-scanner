@@ -451,5 +451,9 @@
     <string name="tests_value_short">значение</string>
     <string name="tests_quick_save_pdf">Сохранить PDF</string>
     <string name="tests_quick_save_text">Текстом</string>
-    <string name="dash_reorder_hint">Плитки можно переставить: удержите плитку и перетащите её на место соседней. Порядок сохраняется.</string>
+    <string name="dash_reorder_hint">Плитки настраиваются пальцем: удержите плитку и перетащите её на место соседней, а коротким касанием выберите ширину. Порядок и размеры сохраняются.</string>
+    <string name="dash_tile_size_title">Размер плитки</string>
+    <string name="dash_tile_size_normal">Обычная</string>
+    <string name="dash_tile_size_wide">Пошире</string>
+    <string name="dash_tile_size_full">Во всю ширину</string>
 </resources>

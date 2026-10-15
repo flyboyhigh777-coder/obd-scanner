@@ -154,7 +154,9 @@ fun ValueTile(
     title: String,
     valueText: String,
     modifier: Modifier = Modifier,
-    alert: Alert = Alert.NONE
+    alert: Alert = Alert.NONE,
+    /** Во сколько раз крупнее обычного показывать значение в растянутой плитке. */
+    valueScale: Float = 1f
 ) {
     val scale = uiScale()
     Panel(modifier) {
@@ -177,7 +179,7 @@ fun ValueTile(
         AutoFitValue(
             valueText,
             MaterialTheme.typography.titleLarge,
-            scale.value,
+            scale.value * valueScale,
             when (alert) {
                 Alert.NONE -> TextBright
                 Alert.WARNING -> GaugeAmber
@@ -245,7 +247,9 @@ fun BarGauge(
     valueText: String,
     fraction: Float?,
     accent: Color = GaugeCyan,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Во сколько раз крупнее обычного показывать значение в растянутой плитке. */
+    valueScale: Float = 1f
 ) {
     val scale = uiScale()
     Panel(modifier) {
@@ -260,7 +264,7 @@ fun BarGauge(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        AutoFitValue(valueText, MaterialTheme.typography.titleLarge, scale.value, TextBright)
+        AutoFitValue(valueText, MaterialTheme.typography.titleLarge, scale.value * valueScale, TextBright)
         Canvas(
             Modifier
                 .fillMaxWidth()

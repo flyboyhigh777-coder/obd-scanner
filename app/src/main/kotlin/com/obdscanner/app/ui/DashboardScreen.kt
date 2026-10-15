@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -73,7 +76,12 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     val performance by viewModel.performance.collectAsState()
     val showGear by viewModel.showGearTile.collectAsState()
     val showRange by viewModel.showRangeTile.collectAsState()
+    val tileSizes by viewModel.dashboardTileSizes.collectAsState()
     var chooser by remember { mutableStateOf(false) }
+    // Над какой плиткой открыт выбор размера. Номер параметра, а не место на
+    // экране: от выбора порядок плиток не меняется, но от перетаскивания -
+    // меняется, и место ничего не значит.
+    var sizeMenuFor by remember { mutableStateOf<Int?>(null) }
     // Показывать ли параметры, о которых машина не сообщала.
     var showAll by remember { mutableStateOf(false) }
 
@@ -179,20 +187,24 @@ fun DashboardScreen(viewModel: ObdViewModel) {
         // Порядок плиток переставляется пальцем: долгое нажатие - и плитка
         // едет за пальцем. Порядок у каждого свой - кому-то первой нужна
         // температура, кому-то напряжение, - и угадать его за человека нельзя.
+        // Коротким касанием той же плитки выбирается её ширина: то, на что
+        // смотрят чаще всего, растягивается, и цифры в нём становятся крупнее.
         val tiles = selected
             .filter { it != Pids.RPM.id && it != Pids.SPEED.id }
             .mapNotNull { Pids.byId[it] }
 
         if (tiles.isNotEmpty()) {
+            val spans = tiles.map { (tileSizes[it.id] ?: TileSize.NORMAL).span(columns) }
             DraggableTileGrid(
-                count = tiles.size,
+                spans = spans,
                 columns = columns,
                 gap = scale.screenGap,
                 onMove = { from, to ->
                     viewModel.moveDashboardPid(tiles[from].id, tiles[to].id)
                 },
+                onTap = { index -> sizeMenuFor = tiles[index].id },
                 modifier = Modifier.fillMaxWidth()
-            ) { index, dragged, isTarget ->
+            ) { index, span, dragged, isTarget ->
                 val pid = tiles[index]
                 val value = live.values[pid.id]
                 // Голый прочерк не отличает "ещё не пришло" от "машина такого
@@ -210,23 +222,35 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                 } else {
                     Modifier
                 }
-                Box(slot.alpha(if (dragged) 0.92f else 1f)) {
+                Box(Modifier.fillMaxSize().then(slot).alpha(if (dragged) 0.92f else 1f)) {
                     if (style == "BAR") {
                         BarGauge(
                             title = pid.title,
                             valueText = text,
                             fraction = value?.let { fractionFor(pid, it, units, profile) },
                             accent = alertColor(alertFor(pid, value)),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxSize(),
+                            valueScale = tileValueScale(span)
                         )
                     } else {
                         ValueTile(
                             title = pid.title,
                             valueText = text,
-                            modifier = Modifier.fillMaxWidth(),
-                            alert = alertFor(pid, value)
+                            modifier = Modifier.fillMaxSize(),
+                            alert = alertFor(pid, value),
+                            valueScale = tileValueScale(span)
                         )
                     }
+                    TileSizeMenu(
+                        expanded = sizeMenuFor == pid.id,
+                        current = tileSizes[pid.id] ?: TileSize.NORMAL,
+                        columns = columns,
+                        onDismiss = { sizeMenuFor = null },
+                        onPick = {
+                            viewModel.setDashboardTileSize(pid.id, it)
+                            sizeMenuFor = null
+                        }
+                    )
                 }
             }
             Hint(stringResource(R.string.dash_reorder_hint))
@@ -351,6 +375,54 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                 }
             }
         )
+    }
+}
+
+/**
+ * Выбор ширины плитки - прямо на ней.
+ *
+ * Меню, а не перетаскивание за угол: угол плитки на телефоне - это пять
+ * миллиметров, в которые надо попасть пальцем на ходу, и промах означал бы
+ * сдвинутую плитку вместо изменённого размера. Выбор из двух-трёх строчек
+ * делается одним касанием и не требует точности.
+ */
+@Composable
+private fun TileSizeMenu(
+    expanded: Boolean,
+    current: TileSize,
+    columns: Int,
+    onDismiss: () -> Unit,
+    onPick: (TileSize) -> Unit
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        Text(
+            stringResource(R.string.dash_tile_size_title),
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+        TileSize.choices(columns).forEach { size ->
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            when (size) {
+                                TileSize.NORMAL -> R.string.dash_tile_size_normal
+                                TileSize.WIDE -> R.string.dash_tile_size_wide
+                                TileSize.FULL -> R.string.dash_tile_size_full
+                            }
+                        ),
+                        color = TextBright
+                    )
+                },
+                // Точка у текущего размера, а не галочка: тот же знак, что и
+                // в остальном приложении, и его видно, не приглядываясь.
+                leadingIcon = {
+                    StatusDot(if (size == current) GaugeCyan else Color.Transparent)
+                },
+                onClick = { onPick(size) }
+            )
+        }
     }
 }
 
