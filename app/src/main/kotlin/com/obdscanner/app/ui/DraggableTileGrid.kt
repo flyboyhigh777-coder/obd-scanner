@@ -153,28 +153,41 @@ fun DraggableTileGrid(
         val column = ((width - gapRound * (columns - 1)) / columns).coerceAtLeast(1)
         fun widthOf(span: Int) = column * span + gapRound * (span - 1)
 
-        // Высота у всех плиток одна - по самой высокой. Сначала спрашиваем
-        // высоту, потом меряем с ней же: иначе широкая плитка с крупными
-        // цифрами оказывается выше соседней, нижние края в ряду расходятся, и
-        // сетка выглядит кривой. Ряды одинаковые ещё и потому, что из них
-        // считается перетаскивание.
-        val widths = measurables.indices.map { widthOf(cells.getOrNull(it)?.span ?: 1) }
-        val rowHeight = measurables
-            .mapIndexed { index, measurable -> measurable.maxIntrinsicHeight(widths[index]) }
-            .maxOrNull() ?: 0
+        // Плитка меряется только по ширине. Высоту ей задавать нельзя: Column
+        // внутри панели раздаёт детям остаток высоты, и стоит ошибиться на
+        // пиксель - значение, ради которого плитка и нужна, обрежется
+        // наполовину. Ошибиться же легко: у шрифтов с высокими выносными
+        // строка занимает больше, чем обещает расчёт.
         val placeables = measurables.mapIndexed { index, measurable ->
-            measurable.measure(Constraints.fixed(widths[index], rowHeight))
+            measurable.measure(Constraints.fixedWidth(widthOf(cells.getOrNull(index)?.span ?: 1)))
         }
+        // Высота ряда - по самой высокой плитке в нём, а не по самой высокой
+        // на экране: в ряду из обычных плиток лишняя высота обернулась бы
+        // двойным промежутком между рядами.
         val rows = TileReorder.rows(cells.take(placeables.size))
-        val height = rows * rowHeight + (rows - 1).coerceAtLeast(0) * gapRound
+        val rowHeights = IntArray(rows)
+        placeables.forEachIndexed { index, placeable ->
+            val row = cells.getOrNull(index)?.row ?: return@forEachIndexed
+            if (placeable.height > rowHeights[row]) rowHeights[row] = placeable.height
+        }
+        val rowTops = IntArray(rows)
+        var top = 0
+        for (row in 0 until rows) {
+            rowTops[row] = top
+            top += rowHeights[row] + gapRound
+        }
+        val height = (top - gapRound).coerceAtLeast(0)
         cellWidth = (column + gapRound).toFloat()
-        cellHeight = (rowHeight + gapRound).toFloat()
+        // Для перетаскивания ряды считаются одинаковыми - средним по сетке.
+        // Разница между ними это несколько пикселей от более крупных цифр в
+        // широкой плитке, а палец и так метит в ячейку, которая подсвечена.
+        cellHeight = if (rows > 0) (height + gapRound).toFloat() / rows else 0f
         layout(width, height) {
             placeables.forEachIndexed { index, placeable ->
                 val cell = cells.getOrNull(index) ?: return@forEachIndexed
                 placeable.placeRelative(
                     x = cell.column * (column + gapRound),
-                    y = cell.row * (rowHeight + gapRound),
+                    y = rowTops.getOrElse(cell.row) { 0 },
                     // Перетаскиваемая плитка рисуется поверх соседних.
                     zIndex = if (index == dragging) 1f else 0f
                 )

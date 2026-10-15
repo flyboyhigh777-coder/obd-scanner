@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -222,21 +221,21 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                 } else {
                     Modifier
                 }
-                Box(Modifier.fillMaxSize().then(slot).alpha(if (dragged) 0.92f else 1f)) {
+                Box(Modifier.fillMaxWidth().then(slot).alpha(if (dragged) 0.92f else 1f)) {
                     if (style == "BAR") {
                         BarGauge(
                             title = pid.title,
                             valueText = text,
                             fraction = value?.let { fractionFor(pid, it, units, profile) },
                             accent = alertColor(alertFor(pid, value)),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth(),
                             valueScale = tileValueScale(span)
                         )
                     } else {
                         ValueTile(
                             title = pid.title,
                             valueText = text,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth(),
                             alert = alertFor(pid, value),
                             valueScale = tileValueScale(span)
                         )

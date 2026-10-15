@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -61,15 +60,12 @@ fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
             .border(1.dp, PanelBorder, RoundedCornerShape(18.dp))
             .padding(scale.panelPadding)
     ) {
-        // Содержимое прижато к середине по высоте, а не к верху. Видно это
-        // только там, где панели задана высота больше её содержимого, - в
-        // сетке плиток приборки, где все плитки одной высоты: иначе короткая
-        // подпись висела бы у верхнего края, а под ней зияла пустота.
-        Column(
-            Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(scale.panelGap, Alignment.CenterVertically),
-            content = content
-        )
+        // Высота панели - по содержимому, и растягивать её по чужой высоте
+        // нельзя. Column раздаёт детям остаток высоты: стоит задать панели
+        // высоту хоть на пиксель меньше нужной, и последняя строка - то самое
+        // значение, ради которого плитка и нужна, - окажется обрезанной
+        // наполовину. На шрифтах с высокими выносными это и случилось.
+        Column(verticalArrangement = Arrangement.spacedBy(scale.panelGap), content = content)
     }
 }
 
