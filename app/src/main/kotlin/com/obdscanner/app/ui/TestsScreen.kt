@@ -172,6 +172,12 @@ fun QuickCheckPage(viewModel: ObdViewModel) = TestPage(viewModel) { connected ->
             // Отчёт строками интерфейса, а не одним куском текста: кусок текста
             // приходится набирать мелким, чтобы в него влезали строки целиком,
             // и на телефоне он нечитаем - а ошибки смотрят именно здесь.
+            //
+            // Подсказка про лупу стоит здесь, а не в настройках: отчёт - самое
+            // плотное место в приложении, и если мелкое не разглядеть, то
+            // именно тут. На Android 8 лупы в системе нет, и обещать её
+            // незачем.
+            if (loupeAvailable()) Hint(stringResource(R.string.loupe_hint))
             report.blocks().forEach { block -> ReportBlockRow(block) }
         }
     }

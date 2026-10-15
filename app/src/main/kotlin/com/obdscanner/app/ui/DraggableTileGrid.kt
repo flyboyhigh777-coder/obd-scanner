@@ -20,7 +20,6 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Сетка плиток, которые можно переставлять пальцем и растягивать.

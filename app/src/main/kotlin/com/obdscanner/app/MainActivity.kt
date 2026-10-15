@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ui.ConnectScreen
 import com.obdscanner.app.ui.DashboardScreen
 import com.obdscanner.app.ui.DiagnosticsScreen
+import com.obdscanner.app.ui.LoupeArea
 import com.obdscanner.app.ui.MeasureScreen
 import com.obdscanner.app.ui.VehicleScreen
 import com.obdscanner.app.ui.theme.Carbon
@@ -96,7 +97,13 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val wide = isWideScreen()
                         val content = @Composable { modifier: Modifier ->
-                            Box(modifier) {
+                            // Лупа по долгому нажатию - на всех вкладках,
+                            // кроме приборки: там долгое нажатие берёт
+                            // плитку. Одно место на всё приложение, а не на
+                            // каждом экране по отдельности: системная лупа
+                            // показывает то, что нарисовано, и ей всё равно,
+                            // что под ней - отчёт, таблица или VIN.
+                            LoupeArea(modifier, enabled = tab != 1) {
                                 when (tab) {
                                     0 -> ConnectScreen(viewModel)
                                     1 -> DashboardScreen(viewModel)

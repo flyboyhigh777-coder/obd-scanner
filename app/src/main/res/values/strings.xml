@@ -452,6 +452,7 @@
     <string name="tests_quick_save_pdf">Сохранить PDF</string>
     <string name="tests_quick_save_text">Текстом</string>
     <string name="dash_reorder_hint">Плитки настраиваются пальцем: удержите плитку и перетащите её на место соседней, а коротким касанием выберите ширину. Порядок и размеры сохраняются.</string>
+    <string name="loupe_hint">Мелко видно — удержите палец на строке: появится лупа. Её можно водить по экрану, не отпуская.</string>
     <string name="dash_tile_size_title">Размер плитки</string>
     <string name="dash_tile_size_normal">Обычная</string>
     <string name="dash_tile_size_wide">Пошире</string>
