@@ -286,7 +286,7 @@ object DtcCatalog {
     )
 
     private fun speedIdleAndOutputs(): Map<String, Pair<String, String>> = mapOf(
-        "P0500" to ("Датчик скорости автомобиля" to "Vehicle speed sensor"),
+        "P0500" to ("Датчик скорости автомобиля: нет сигнала или неисправность" to "Vehicle speed sensor: no signal or malfunction"),
         "P0501" to ("Сигнал датчика скорости вне диапазона" to "Vehicle speed sensor range / performance"),
         "P0502" to ("Низкий сигнал датчика скорости" to "Vehicle speed sensor circuit low input"),
         "P0503" to ("Пропадающий сигнал датчика скорости" to "Vehicle speed sensor intermittent / erratic"),

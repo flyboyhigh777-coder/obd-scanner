@@ -5,6 +5,7 @@ import com.obdscanner.core.elm.ObdPayload
 import com.obdscanner.core.modules.ModuleProtocol
 import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
+import com.obdscanner.core.modules.UdsStatus
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.session.ElmAdapter
 import com.obdscanner.core.session.ObdSession
@@ -145,6 +146,46 @@ class ModuleScanTest {
         val rpm = obd.read(Pids.RPM)
         assertNotNull("обороты читаются после перебора", rpm)
         assertTrue("и значение осмысленное: $rpm", rpm!! in 300.0..7000.0)
+    }
+
+    /**
+     * Блок двигателя по UDS: коды со статусом читаются до сброса, а после
+     * режима 04 их там больше нет. Именно поэтому их перечитывают и кладут в
+     * архив перед сбросом - иначе P0500 пропадает бесследно.
+     */
+    @Test
+    fun engineUdsCodesAreGoneAfterClear() {
+        val clock = FakeClock()
+        val obd = ObdSession(ElmAdapter(SimulatedEcu(clock = clock::now), sleep = clock::sleep, now = clock::now))
+        obd.connect()
+
+        val before = obd.readModule(ModuleScan.ENGINE_ADDRESS)
+        assertNotNull("блок двигателя ответил по UDS", before)
+        val codes = before!!.dtcs
+        assertTrue("коды режима 03 видны и по UDS: ${codes.map { it.full }}", codes.any { it.code == "P0301" })
+        assertEquals("сохранённый код - есть сейчас", true, codes.first { it.code == "P0301" }.active)
+        assertTrue(codes.first { it.code == "P0301" }.statusText!!.contains("есть сейчас"))
+
+        assertTrue(obd.clearDtcs())
+        val after = obd.readModule(ModuleScan.ENGINE_ADDRESS)
+        assertNotNull(after)
+        assertTrue("после сброса память пуста: ${after!!.dtcs.map { it.full }}", after.dtcs.isEmpty())
+        // И обычный опрос после смены адреса работает.
+        assertNotNull(obd.read(Pids.RPM))
+    }
+
+    /** Статус UDS одной фразой - главное, что отличает неисправность от записи. */
+    @Test
+    fun udsStatusInWords() {
+        assertTrue(UdsStatus.describe(0x09)!!.startsWith("ошибка есть сейчас"))
+        assertTrue(UdsStatus.describe(0x88)!!.contains("подтверждена"))
+        assertTrue(UdsStatus.describe(0x88)!!.contains("лампу"))
+        assertTrue(UdsStatus.describe(0x50)!!.startsWith("тест не проходил после сброса"))
+        assertTrue(UdsStatus.describe(0x24)!!.startsWith("ожидает подтверждения"))
+        assertTrue(UdsStatus.describe(0x50)!!.endsWith("(0x50)"))
+        assertNull(UdsStatus.describe(null))
+        assertEquals(true, UdsStatus.isReal(0x08))
+        assertEquals(false, UdsStatus.isReal(0x50))
     }
 
     /** Перебор можно остановить - двести адресов это полминуты ожидания. */

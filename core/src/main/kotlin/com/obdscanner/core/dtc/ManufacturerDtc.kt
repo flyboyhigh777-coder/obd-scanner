@@ -76,10 +76,23 @@ object ManufacturerDtc {
                 "Cylinder 3 misfire, catalyst-damaging"),
             "P1304" to ("Пропуски воспламенения в цилиндре 4, опасные для катализатора" to
                 "Cylinder 4 misfire, catalyst-damaging"),
-            "P1336" to ("Рассогласование сигналов датчиков коленвала и распредвала" to
-                "Crankshaft / camshaft signal mismatch"),
+            // P1335-P1390, P1545, P1559, P1578 - контроль электронного дросселя
+            // (E-GAS). Раньше P1336 стоял здесь как "рассогласование
+            // коленвала и распредвала"; в таблице кодов ВАЗ М74 / Bosch
+            // ME17.9.7 с E-GAS он про датчики положения заслонки, а дроссель у
+            // Патриота 2016+ как раз электронный.
+            "P1335" to ("Контроль электронного дросселя: положение заслонки вне допустимого диапазона" to
+                "Electronic throttle monitoring: throttle position out of range"),
+            "P1336" to ("Контроль электронного дросселя: показания датчиков положения не совпадают" to
+                "Electronic throttle monitoring: position sensors disagree"),
             "P1386" to ("Ошибка теста канала датчика детонации" to
                 "Knock sensor channel test error"),
+            "P1388" to ("Контроль электронного дросселя: напряжения датчиков положения вне диапазона" to
+                "Electronic throttle monitoring: position sensor voltages out of range"),
+            "P1389" to ("Контроль электронного дросселя: обороты двигателя вне допустимого диапазона" to
+                "Electronic throttle monitoring: engine speed out of range"),
+            "P1390" to ("Контроль электронного дросселя: нет реакции системы на неисправность" to
+                "Electronic throttle monitoring: no system reaction to a fault"),
             "P1410" to ("Цепь клапана продувки адсорбера: замыкание на бортсеть" to
                 "Canister purge valve circuit shorted to battery"),
             "P1425" to ("Цепь клапана продувки адсорбера: замыкание на массу" to
@@ -100,8 +113,14 @@ object ManufacturerDtc {
                 "Idle air control valve circuit open"),
             "P1541" to ("Цепь управления реле бензонасоса: обрыв" to
                 "Fuel pump relay control circuit open"),
+            "P1545" to ("Привод дросселя: положение заслонки слишком отличается от заданного" to
+                "Throttle actuator: position deviates too far from target"),
+            "P1559" to ("Привод дросселя: положение заслонки вне допустимого диапазона" to
+                "Throttle actuator: position out of range"),
             "P1570" to ("Иммобилизатор: нет ответа или ответ не принят" to
                 "Immobiliser: no answer or answer rejected"),
+            "P1578" to ("Привод дросселя: выход за пределы адаптации" to
+                "Throttle actuator: adaptation out of limits"),
             "P1600" to ("Нет связи с иммобилизатором" to
                 "No communication with the immobiliser"),
             "P1602" to ("Пропадание напряжения питания блока управления" to

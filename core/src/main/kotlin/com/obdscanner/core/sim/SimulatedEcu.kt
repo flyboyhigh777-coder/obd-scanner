@@ -215,9 +215,28 @@ class SimulatedEcu(
             0x07 -> dtcFrame(0x47, pendingDtcs)
             0x09 -> respondVehicleInfo(command)
             0x0A -> dtcFrame(0x4A, permanentDtcs)
+            0x19 -> respondEngineUds(command)
             0x22 -> respondExtendedData(command)
             else -> noData()
         }
+    }
+
+    /**
+     * Коды двигателя по UDS (сервис 19 02) - так их отдаёт и настоящий
+     * ME17.9.7 на физическом адресе 7E0. Статус: сохранённые - "есть сейчас и
+     * подтверждена" (0x09), ожидающие - "ждёт подтверждения" (0x04). Сброс
+     * режимом 04 стирает и эти записи - как в машине.
+     */
+    private fun respondEngineUds(command: String): String {
+        if (header != 0x7E0 || !command.startsWith("1902")) return noData()
+        val out = arrayListOf(0x59, 0x02, 0xFF)
+        fun add(code: String, status: Int) {
+            val pair = DtcCodec.encode(code) ?: return
+            out.add(pair.first); out.add(pair.second); out.add(0x00); out.add(status)
+        }
+        storedDtcs.forEach { add(it, 0x09) }
+        pendingDtcs.filter { it !in storedDtcs }.forEach { add(it, 0x04) }
+        return frame(out.toIntArray())
     }
 
     private fun respondAt(command: String): String = when {

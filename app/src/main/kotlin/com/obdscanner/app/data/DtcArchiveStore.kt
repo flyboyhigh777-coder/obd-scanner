@@ -35,9 +35,12 @@ object DtcArchiveStore {
         return list
     }
 
-    /** Добавляет чтение и возвращает архив целиком - уже обрезанный по пределу. */
-    fun add(context: Context, snapshot: DtcSnapshot): List<DtcSnapshot> {
-        val merged = DtcArchive.merge(load(context), snapshot)
+    /**
+     * Добавляет чтение и возвращает архив целиком - уже обрезанный по пределу.
+     * [replacing] - время записи, которую это чтение заменяет (см. [DtcArchive.merge]).
+     */
+    fun add(context: Context, snapshot: DtcSnapshot, replacing: Long? = null): List<DtcSnapshot> {
+        val merged = DtcArchive.merge(load(context), snapshot, replacing)
         cache = merged
         runCatching { File(context.filesDir, FILE).writeText(DtcArchive.encode(merged)) }
         return merged

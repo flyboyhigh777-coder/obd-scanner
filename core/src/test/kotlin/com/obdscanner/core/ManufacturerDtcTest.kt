@@ -57,7 +57,24 @@ class ManufacturerDtcTest {
         assertTrue(Dtc("P1500").description.contains("бензонасос"))
         assertTrue(Dtc("P1606").description.contains("неровной дороги"))
         assertTrue(Dtc("P1301").description.contains("цилиндре 1"))
-        assertEquals(38, ManufacturerDtc.size(ManufacturerDtcFamily.ME17_9_7))
+        assertEquals(45, ManufacturerDtc.size(ManufacturerDtcFamily.ME17_9_7))
+    }
+
+    /**
+     * Дроссель у Патриота 2016+ электронный, и коды P1335/P1336/P1390 - про
+     * его контроль. Они пришли с настоящей машины; P1336 раньше расшифровывался
+     * как "коленвал и распредвал".
+     */
+    @Test
+    fun electronicThrottleCodes() {
+        DtcCatalog.manufacturerFamily = ManufacturerDtcFamily.ME17_9_7
+        assertTrue(Dtc("P1335").description.contains("дросселя"))
+        assertTrue(Dtc("P1336").description.contains("дросселя"))
+        assertFalse(Dtc("P1336").description.contains("коленвал"))
+        assertTrue(Dtc("P1390").description.contains("дросселя"))
+        // P1391 и P1571 в открытых таблицах не нашлись - и не выдумываются.
+        assertEquals(DtcTextSource.FAMILY, Dtc("P1391").descriptionDetails.source)
+        assertEquals(DtcTextSource.FAMILY, Dtc("P1571").descriptionDetails.source)
     }
 
     /** Русский справочник важнее таблицы ЭБУ и датасета. */

@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.obdscanner.app.data.DtcReferenceAsset
 import com.obdscanner.core.dtc.Dtc
+import com.obdscanner.core.dtc.DtcArchive
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.dtc.DtcTextSource
 import org.junit.Assert.assertEquals
@@ -89,6 +90,9 @@ class ObdAppFlowTest {
     @Test
     fun demoDriveThroughEveryScreen() {
         val vm = ViewModelProvider(compose.activity)[ObdViewModel::class.java]
+        // Архив живёт в синглтоне и мог остаться от соседних тестов - считаем
+        // только записи этого прогона.
+        val startedAt = System.currentTimeMillis()
 
         shot("01_connect")
 
@@ -199,6 +203,26 @@ class ObdAppFlowTest {
             listOf("P0420"),
             vm.dtc.value.permanent.map { it.code }
         )
+
+        // Всё, что стёр сброс, осталось в архиве: отдельной записью "перед
+        // сбросом", с расшифровками и с кодами блока двигателя по UDS. Раньше
+        // запись сеанса после сброса затиралась - и коды пропадали бесследно.
+        val saved = vm.archive.value.firstOrNull { it.beforeClear }
+        assertNotNull("снимок перед сбросом есть: ${vm.archive.value}", saved)
+        assertEquals(listOf("P0301", "P0171", "P0420", "P1513"), saved!!.stored)
+        assertTrue("расшифровки сохранены: ${saved.descriptions}", saved.descriptions["P0301"].orEmpty().isNotBlank())
+        assertTrue(
+            "коды двигателя по UDS со статусом: ${saved.modules}",
+            saved.modules.any { it.address == 0x7E0 && it.code.startsWith("P0301") && it.status == 0x09 }
+        )
+        assertEquals(
+            "запись сеанса заменена снимком, а не задвоена",
+            1,
+            vm.archive.value.count { it.timeMillis >= startedAt && "P0301" in it.stored }
+        )
+        // Текст для Telegram - с расшифровками, а не голыми кодами.
+        val shared = DtcArchive.asText(saved, "17.10.2026 09:02")
+        assertTrue(shared, shared.lines().any { it.startsWith("P0301 — ") && it.length > 12 })
         shot("09_dtc_after_clear")
 
         // Автомобиль: VIN собран из многокадрового ответа и разобран.

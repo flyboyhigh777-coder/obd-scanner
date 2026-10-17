@@ -23,12 +23,14 @@ import com.obdscanner.core.electrical.Battery
 import com.obdscanner.core.electrical.BatteryMonitor
 import com.obdscanner.core.electrical.BatteryVerdict
 import com.obdscanner.core.electrical.CrankingResult
+import com.obdscanner.core.dtc.DtcArchive
 import com.obdscanner.core.dtc.DtcCatalog
 import com.obdscanner.core.dtc.DtcSnapshot
 import com.obdscanner.core.dtc.DtcSource
 import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.modules.FoundModule
+import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
 import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.FuelEconomy
@@ -756,6 +758,11 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                     established = true
                     // Новое подключение - новая запись в архиве.
                     sessionStartedAt = System.currentTimeMillis()
+                    // И найденные блоки - тоже заново. Иначе список с прошлого
+                    // подключения молча попадал в каждую следующую запись
+                    // архива, и одно и то же чтение висело там трижды под
+                    // разным временем.
+                    _modules.value = ModuleScanState()
                     _supportedPids.value = Pids.ALL.filter { it.id in outcome.supportedPids }
                     ensureDashboardSelection()
                     _connection.value = ConnectionState.Connected(
@@ -1055,19 +1062,100 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun archiveCurrentReading() {
         val dtc = _dtc.value
-        val snapshot = DtcSnapshot(
+        val snapshot = snapshotOf(
             timeMillis = if (sessionStartedAt > 0) sessionStartedAt else System.currentTimeMillis(),
-            vehicle = _profile.value.name,
-            vin = _vehicle.value.vin,
-            stored = dtc.stored.map { it.code },
-            pending = dtc.pending.map { it.code },
-            permanent = dtc.permanent.map { it.code },
-            modules = _modules.value.found.flatMap { module ->
-                module.dtcs.map { ArchivedModuleDtc(module.address, it.full) }
-            },
+            stored = dtc.stored,
+            pending = dtc.pending,
+            permanent = dtc.permanent,
+            modules = _modules.value.found,
             milOn = dtc.monitor?.milOn ?: false,
         )
         _archive.value = DtcArchiveStore.add(getApplication(), snapshot)
+    }
+
+    /** Снимок для архива - с расшифровками и статусами, как их видно на экране. */
+    private fun snapshotOf(
+        timeMillis: Long,
+        stored: List<Dtc>,
+        pending: List<Dtc>,
+        permanent: List<Dtc>,
+        modules: List<FoundModule>,
+        milOn: Boolean,
+        beforeClear: Boolean = false,
+    ): DtcSnapshot = DtcArchive.withDescriptions(
+        DtcSnapshot(
+            timeMillis = timeMillis,
+            vehicle = _profile.value.name,
+            vin = _vehicle.value.vin,
+            stored = stored.map { it.code },
+            pending = pending.map { it.code },
+            permanent = permanent.map { it.code },
+            modules = modules.flatMap { module ->
+                module.dtcs.map { ArchivedModuleDtc(module.address, it.full, it.status) }
+            },
+            milOn = milOn,
+            beforeClear = beforeClear,
+        )
+    )
+
+    /**
+     * Всё, что сотрёт сброс, - в архив, до сброса.
+     *
+     * Раньше архив держал одну запись на подключение и переписывал её при
+     * каждом чтении. Прочитали коды, сбросили, прошлись по блокам - и запись
+     * сеанса молча затиралась уже пустым списком двигателя: то, ради чего
+     * человек открыл приложение, исчезало ровно в момент сброса.
+     *
+     * Поэтому прямо перед режимом 04 коды перечитываются - и обычным OBD-II,
+     * и по UDS с адреса блока двигателя (у ME17.9.7 там видно больше, например
+     * P0500), - и ложатся отдельной записью "перед сбросом" на место записи
+     * сеанса. Если какой-то запрос не ответил, берётся последнее прочитанное:
+     * пустой список из-за сбоя связи хуже старого.
+     */
+    private fun archiveBeforeClear(session: ObdSession): Long {
+        val last = _dtc.value
+        val stored = session.readDtcsOrNull(DtcSource.STORED) ?: last.stored
+        val pending = session.readDtcsOrNull(DtcSource.PENDING) ?: last.pending
+        val permanent = session.readDtcsOrNull(DtcSource.PERMANENT) ?: last.permanent
+        val milOn = session.readMonitorStatus()?.milOn ?: last.monitor?.milOn ?: false
+        val engine = runCatching { session.readModule(ModuleScan.ENGINE_ADDRESS) }.getOrNull()
+        val modules = withEngineModule(_modules.value.found, engine, dropIfMissing = false)
+        _modules.value = _modules.value.copy(found = modules)
+        val now = System.currentTimeMillis()
+        val snapshot = snapshotOf(
+            timeMillis = now,
+            stored = stored,
+            pending = pending,
+            permanent = permanent,
+            modules = modules,
+            milOn = milOn,
+            beforeClear = true,
+        )
+        _archive.value = DtcArchiveStore.add(
+            getApplication(),
+            snapshot,
+            replacing = sessionStartedAt.takeIf { it > 0 },
+        )
+        return now
+    }
+
+    /**
+     * Список найденных блоков со свежим ответом блока двигателя.
+     *
+     * Отказ или молчание старую находку не затирают - кроме чтения после
+     * сброса ([dropIfMissing]): там старые коды двигателя уже неправда, и
+     * лучше не показать ничего, чем показать стёртое.
+     */
+    private fun withEngineModule(
+        found: List<FoundModule>,
+        engine: FoundModule?,
+        dropIfMissing: Boolean,
+    ): List<FoundModule> {
+        val address = ModuleScan.ENGINE_ADDRESS
+        val fresh = engine?.takeIf { it.reply is ModuleReply.Codes }
+        if (fresh == null) return if (dropIfMissing) found.filter { it.address != address } else found
+        val rest = found.filter { it.address != address }
+        return (rest + fresh).sortedBy { it.address }
     }
 
     /** Очистить архив - его смотрят глазами, и мусор в нём мешает. */
@@ -1293,7 +1381,17 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             ObdTask.ClearDtcs -> {
+                // Сначала - в архив всё, что сброс сотрёт. После сброса этих
+                // кодов в машине больше нет, и посмотреть их будет негде.
+                val savedAt = archiveBeforeClear(session)
                 val ok = session.clearDtcs()
+                // Дальше - новая запись: первое же чтение после сброса иначе
+                // переписало бы снимок "до" списком "после".
+                sessionStartedAt = maxOf(System.currentTimeMillis(), savedAt + 1)
+                val engineAfter = runCatching { session.readModule(ModuleScan.ENGINE_ADDRESS) }.getOrNull()
+                _modules.value = _modules.value.copy(
+                    found = withEngineModule(_modules.value.found, engineAfter, dropIfMissing = true)
+                )
                 val stored = session.readDtcsOrNull(DtcSource.STORED)
                 val pending = session.readDtcsOrNull(DtcSource.PENDING)
                 val permanent = session.readDtcsOrNull(DtcSource.PERMANENT)
@@ -1310,6 +1408,10 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                         if (ok) R.string.dtc_cleared else R.string.dtc_clear_failed
                     )
                 )
+                // Состояние "после" в архив сразу не пишется: оно и так на
+                // экране, а следующее чтение ляжет новой записью само. Иначе
+                // свежей записью в архиве оказался бы почти пустой список, а
+                // снимок "до" - ради которого всё и затевалось - уехал бы вниз.
             }
 
             ObdTask.RefreshVehicle -> loadVehicle(session)

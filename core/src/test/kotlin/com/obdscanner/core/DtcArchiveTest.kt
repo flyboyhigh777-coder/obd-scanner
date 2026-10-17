@@ -4,6 +4,7 @@ import com.obdscanner.core.dtc.ArchivedModuleDtc
 import com.obdscanner.core.dtc.DtcArchive
 import com.obdscanner.core.dtc.DtcSnapshot
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -120,6 +121,100 @@ class DtcArchiveTest {
         assertTrue(text, text.contains("760"))
         assertTrue(text, text.contains("13.10.2026"))
         assertTrue(text, text.contains("XTT316300H1000001"))
+    }
+
+    /** Чтение с настоящего Патриота: блок двигателя по UDS, коды со статусом. */
+    private val beforeClear = DtcSnapshot(
+        timeMillis = 1_760_673_540_000,
+        vehicle = "УАЗ Патриот 2016+",
+        stored = listOf("P0500"),
+        modules = listOf(
+            ArchivedModuleDtc(0x7E0, "P0500-00", 0x09),
+            ArchivedModuleDtc(0x7E0, "P0112-00", 0x50),
+        ),
+        descriptions = mapOf("P0500" to "Датчик скорости", "P0112" to "Датчик температуры воздуха"),
+        beforeClear = true,
+    )
+
+    /** Расшифровка, статус и пометка "перед сбросом" переживают запись в файл. */
+    @Test
+    fun descriptionsStatusAndKindSurvive() {
+        val back = DtcArchive.decode(DtcArchive.encode(listOf(beforeClear))).single()
+        assertEquals(beforeClear, back)
+        assertTrue(back.beforeClear)
+        assertEquals(0x09, back.modules.first().status)
+        assertEquals("Датчик температуры воздуха", back.descriptions["P0112"])
+    }
+
+    /** Файл, записанный прошлой версией (без новых столбцов), читается как раньше. */
+    @Test
+    fun archiveOfThePreviousVersionStillReads() {
+        val old = "=1760673540000\tУАЗ Патриот 2016+\t\t0\nM\t7E0\tP0500-00\nS\tP0301\n"
+        val back = DtcArchive.decode(old).single()
+        assertEquals(listOf("P0301"), back.stored)
+        assertEquals("P0500-00", back.modules.single().code)
+        assertNull(back.modules.single().status)
+        assertTrue(back.descriptions.isEmpty())
+        assertFalse(back.beforeClear)
+        // Расшифровки в такой записи нет - но показать её всё равно есть чем.
+        assertTrue(back.describe("P0500-00"), back.describe("P0500-00").contains("скорости"))
+    }
+
+    /**
+     * Текст для Telegram: у каждого кода расшифровка и статус. Голый
+     * "Блок 7E0: P0500-00" ничего не говорил - ошибку спидометра в таком
+     * списке было не узнать.
+     */
+    @Test
+    fun sharedTextCarriesDescriptions() {
+        val text = DtcArchive.asText(beforeClear, "17.10.2026 09:02")
+        assertTrue(text, text.contains("перед сбросом"))
+        assertTrue(text, text.contains("Блок 7E0 (двигатель)"))
+        assertTrue(text, text.lines().any { it.startsWith("P0500-00 — ") && it.contains("скорости") })
+        assertTrue(text, text.contains("ошибка есть сейчас"))
+        assertTrue(text, text.contains("тест не проходил после сброса"))
+        assertTrue(text, text.lines().any { it.startsWith("P0500 — ") })
+    }
+
+    /** Точная расшифровка справочника важнее сохранённой, сохранённая - важнее семейства. */
+    @Test
+    fun savedDescriptionFillsWhatTheCatalogDoesNotKnow() {
+        val snapshot = beforeClear.copy(descriptions = mapOf("P1999" to "Из руководства", "P0500" to "старый текст"))
+        assertEquals("Из руководства", snapshot.describe("P1999-00"))
+        assertTrue(snapshot.describe("P0500"), snapshot.describe("P0500").contains("скорости"))
+    }
+
+    /** В момент чтения в снимок ложатся расшифровки всех его кодов. */
+    @Test
+    fun descriptionsAreFilledOnRead() {
+        val filled = DtcArchive.withDescriptions(beforeClear.copy(descriptions = emptyMap()))
+        assertEquals(setOf("P0500", "P0112"), filled.descriptions.keys)
+        assertTrue(filled.descriptions.values.all { it.isNotBlank() })
+    }
+
+    /**
+     * Снимок перед сбросом встаёт на место записи сеанса, а не рядом с ней:
+     * иначе одни и те же коды висят в архиве дважды.
+     */
+    @Test
+    fun snapshotBeforeClearReplacesTheSessionRecord() {
+        val session = sample.copy(timeMillis = 1_000)
+        var archive = DtcArchive.merge(emptyList(), session)
+        archive = DtcArchive.merge(archive, beforeClear.copy(timeMillis = 2_000), replacing = 1_000)
+        assertEquals(listOf(2_000L), archive.map { it.timeMillis })
+        assertTrue(archive.single().beforeClear)
+    }
+
+    /** Пустой снимок перед сбросом запись сеанса не стирает. */
+    @Test
+    fun emptySnapshotBeforeClearKeepsTheSessionRecord() {
+        val session = sample.copy(timeMillis = 1_000)
+        val archive = DtcArchive.merge(
+            listOf(session),
+            DtcSnapshot(timeMillis = 2_000, vehicle = "УАЗ", beforeClear = true),
+            replacing = 1_000,
+        )
+        assertEquals(listOf(1_000L), archive.map { it.timeMillis })
     }
 
     /** Табуляция в названии машины не должна разваливать формат. */

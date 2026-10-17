@@ -1,6 +1,7 @@
 package com.obdscanner.app.ui
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,7 @@ import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
 import com.obdscanner.app.data.DocumentationDtc
+import com.obdscanner.app.data.DtcArchivePdf
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GaugeRed
@@ -57,7 +60,11 @@ import com.obdscanner.core.dtc.DtcTextSource
 import com.obdscanner.core.modules.ModuleDtc
 import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
+import com.obdscanner.core.modules.UdsStatus
 import com.obdscanner.core.obd.Pids
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -397,13 +404,16 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
         val described = dtc.described
         Text(described.description, color = TextMuted)
         // Статус из UDS говорит больше, чем сам код: одно дело - неисправность
-        // прямо сейчас, другое - запись о том, что было когда-то.
-        val status = buildList {
-            if (dtc.active == true) add(stringResource(R.string.modules_status_active))
-            if (dtc.confirmed == true) add(stringResource(R.string.modules_status_confirmed))
-            if (dtc.lampRequested == true) add(stringResource(R.string.modules_status_lamp))
+        // прямо сейчас, другое - запись о тесте, который после сброса ещё не
+        // проходил. Запрос "все коды" отдаёт и то и другое вперемешку, поэтому
+        // статус показывается всегда, а не только когда он тревожный.
+        dtc.statusText?.let { status ->
+            Text(
+                status,
+                color = if (UdsStatus.isReal(dtc.status) == true) GaugeRed else TextMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
-        if (status.isNotEmpty()) Hint(status.joinToString(" | "))
         dtc.failureType?.let { Hint(stringResource(R.string.modules_failure_type, it)) }
     }
 }
@@ -420,6 +430,22 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
 private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
     val archive by viewModel.archive.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pdfFailed = stringResource(R.string.archive_pdf_failed)
+
+    // PDF рисуется не на главном потоке: на длинном архиве это заметная пауза.
+    fun openPdf(snapshots: List<DtcSnapshot>) {
+        scope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                DtcArchivePdf.write(context, snapshots, ::archiveDate)
+            }
+            if (uri == null) {
+                Toast.makeText(context, pdfFailed, Toast.LENGTH_SHORT).show()
+            } else {
+                DtcArchivePdf.open(context, uri)
+            }
+        }
+    }
 
     Panel {
         PanelTitle(stringResource(R.string.archive_title))
@@ -433,19 +459,28 @@ private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
             // показано живым списком выше; разворачивать её значит показать
             // одно и то же дважды. Без связи наоборот: разворачиваем, ради
             // этого архив и делался.
-            ArchiveEntry(snapshot, expandedByDefault = offline && index == 0) {
-                val text = DtcArchive.asText(snapshot, archiveDate(snapshot.timeMillis))
-                context.startActivity(
-                    Intent.createChooser(
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, text)
-                        },
-                        null
+            ArchiveEntry(
+                snapshot,
+                expandedByDefault = offline && index == 0,
+                onShare = {
+                    val text = DtcArchive.asText(snapshot, archiveDate(snapshot.timeMillis))
+                    context.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            },
+                            null
+                        )
                     )
-                )
-            }
+                },
+                onPdf = { openPdf(listOf(snapshot)) },
+            )
         }
+        OutlinedButton(
+            onClick = { openPdf(archive) },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) { Text(stringResource(R.string.archive_pdf_all)) }
         TextButton(onClick = viewModel::clearArchive) {
             Text(stringResource(R.string.archive_clear), color = GaugeAmber)
         }
@@ -453,7 +488,12 @@ private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
 }
 
 @Composable
-private fun ArchiveEntry(snapshot: DtcSnapshot, expandedByDefault: Boolean, onShare: () -> Unit) {
+private fun ArchiveEntry(
+    snapshot: DtcSnapshot,
+    expandedByDefault: Boolean,
+    onShare: () -> Unit,
+    onPdf: () -> Unit,
+) {
     var expanded by remember(snapshot.timeMillis) { mutableStateOf(expandedByDefault) }
 
     Column(Modifier.padding(top = 10.dp)) {
@@ -468,6 +508,13 @@ private fun ArchiveEntry(snapshot: DtcSnapshot, expandedByDefault: Boolean, onSh
                     color = TextBright,
                     style = MaterialTheme.typography.titleMedium
                 )
+                if (snapshot.beforeClear) {
+                    Text(
+                        stringResource(R.string.archive_before_clear),
+                        color = GaugeAmber,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 Hint(
                     if (snapshot.isEmpty) {
                         stringResource(R.string.archive_no_codes)
@@ -475,6 +522,9 @@ private fun ArchiveEntry(snapshot: DtcSnapshot, expandedByDefault: Boolean, onSh
                         stringResource(R.string.archive_count, snapshot.total)
                     }
                 )
+            }
+            TextButton(onClick = onPdf) {
+                Text(stringResource(R.string.archive_pdf), color = TextBright)
             }
             TextButton(onClick = onShare) {
                 Text(stringResource(R.string.archive_share), color = TextBright)
@@ -485,27 +535,32 @@ private fun ArchiveEntry(snapshot: DtcSnapshot, expandedByDefault: Boolean, onSh
 
         Hint(snapshot.vehicle)
         snapshot.vin?.let { Hint("VIN $it") }
-        ArchiveCodes(stringResource(R.string.dtc_group_stored), snapshot.stored)
-        ArchiveCodes(stringResource(R.string.dtc_group_pending), snapshot.pending)
-        ArchiveCodes(stringResource(R.string.dtc_group_permanent), snapshot.permanent)
-        if (snapshot.modules.isNotEmpty()) {
+        ArchiveCodes(snapshot, stringResource(R.string.dtc_group_stored), snapshot.stored)
+        ArchiveCodes(snapshot, stringResource(R.string.dtc_group_pending), snapshot.pending)
+        ArchiveCodes(snapshot, stringResource(R.string.dtc_group_permanent), snapshot.permanent)
+        for ((address, modules) in snapshot.modules.groupBy { it.address }) {
             Text(
-                stringResource(R.string.archive_modules),
+                DtcArchive.moduleTitle(address),
                 color = TextMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 6.dp)
             )
-            snapshot.modules.forEach { module ->
-                // Расшифровка берётся из каталога, а он работает без машины -
-                // в этом и смысл архива.
-                ArchiveCodeRow("${module.hex}: ${module.code}", module.code.substringBefore('-'))
+            modules.forEach { module ->
+                // Расшифровка сохранена при чтении, а справочник работает без
+                // машины - в этом и смысл архива.
+                ArchiveCodeRow(
+                    label = module.code,
+                    description = snapshot.describe(module.code),
+                    status = module.statusText,
+                    real = UdsStatus.isReal(module.status),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ArchiveCodes(title: String, codes: List<String>) {
+private fun ArchiveCodes(snapshot: DtcSnapshot, title: String, codes: List<String>) {
     if (codes.isEmpty()) return
     Text(
         title,
@@ -513,14 +568,23 @@ private fun ArchiveCodes(title: String, codes: List<String>) {
         style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.padding(top = 6.dp)
     )
-    codes.forEach { ArchiveCodeRow(it, it) }
+    codes.forEach { ArchiveCodeRow(it, snapshot.describe(it), null, null) }
 }
 
 @Composable
-private fun ArchiveCodeRow(label: String, code: String) {
+private fun ArchiveCodeRow(label: String, description: String, status: String?, real: Boolean?) {
     Column(Modifier.padding(top = 4.dp)) {
         Text(label, color = TextBright, style = MaterialTheme.typography.titleSmall)
-        Text(Dtc(code).description, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+        Text(description, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+        if (status != null) {
+            // Настоящая неисправность выделена: в ответе блока по UDS рядом с
+            // ней лежат и записи о тестах, которые просто ещё не проходили.
+            Text(
+                status,
+                color = if (real == true) GaugeRed else TextMuted,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
     }
 }
 

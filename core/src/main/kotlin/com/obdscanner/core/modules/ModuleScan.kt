@@ -102,6 +102,52 @@ data class ModuleDtc(
 
     /** Описание берётся из общего каталога - там есть и C/B/U-коды. */
     val described: Dtc get() = Dtc(code)
+
+    /** Статус одной фразой: ошибка есть сейчас, подтверждена, только история... */
+    val statusText: String? get() = UdsStatus.describe(status)
+}
+
+/**
+ * Байт статуса кода UDS (ISO 14229, DTCStatusMask) человеческими словами.
+ *
+ * Зачем это нужно. Коды здесь читаются запросом "19 02 FF" - "все коды с любой
+ * отметкой статуса". В ответ блок отдаёт не только то, что сломано сейчас, но
+ * и старые записи, и коды, тест по которым после сброса ещё не проходил. Без
+ * статуса такой список выглядит как два десятка неисправностей сразу, причём с
+ * взаимоисключающими парами ("низкий сигнал" и "высокий сигнал" одного
+ * датчика). Статус и говорит, какие из них настоящие.
+ */
+object UdsStatus {
+    const val TEST_FAILED = 0x01
+    const val FAILED_THIS_CYCLE = 0x02
+    const val PENDING = 0x04
+    const val CONFIRMED = 0x08
+    const val NOT_TESTED_SINCE_CLEAR = 0x10
+    const val FAILED_SINCE_CLEAR = 0x20
+    const val LAMP = 0x80
+
+    /**
+     * Одна фраза - самое важное из байта. Порядок проверок и есть порядок
+     * важности: "есть сейчас" перекрывает "подтверждена", а та - "была когда-то".
+     */
+    fun describe(status: Int?): String? {
+        if (status == null) return null
+        val s = status and 0xFF
+        val main = when {
+            s and TEST_FAILED != 0 -> ObdText.pick("ошибка есть сейчас", "failing now")
+            s and CONFIRMED != 0 -> ObdText.pick("подтверждена, сейчас не проявляется", "confirmed, not failing now")
+            s and PENDING != 0 -> ObdText.pick("ожидает подтверждения", "pending")
+            s and FAILED_THIS_CYCLE != 0 -> ObdText.pick("была в этой поездке", "failed this drive cycle")
+            s and FAILED_SINCE_CLEAR != 0 -> ObdText.pick("была после последнего сброса", "failed since last clear")
+            s and NOT_TESTED_SINCE_CLEAR != 0 -> ObdText.pick("тест не проходил после сброса", "not tested since last clear")
+            else -> ObdText.pick("только запись в памяти", "memory record only")
+        }
+        val lamp = if (s and LAMP != 0) ObdText.pick(", зажигает лампу", ", lamp requested") else ""
+        return "%s%s (0x%02X)".format(main, lamp, s)
+    }
+
+    /** Неисправность настоящая: есть сейчас, подтверждена или ждёт подтверждения. */
+    fun isReal(status: Int?): Boolean? = status?.let { it and (TEST_FAILED or PENDING or CONFIRMED) != 0 }
 }
 
 /** Найденный блок: по какому адресу живёт и что рассказал. */
@@ -159,6 +205,21 @@ object ModuleScan {
 
     /** Блоки двигателя и КПП видно и обычным OBD-II - их в находки не пишем. */
     fun isStandardObd(address: Int): Boolean = address in 0x7E0..0x7E7
+
+    /**
+     * Физический адрес блока двигателя. По UDS он отдаёт больше, чем по
+     * режиму 03: например, P0500 (датчик скорости) у ME17.9.7 виден только
+     * так. Сброс режимом 04 стирает и эти записи - поэтому перед сбросом их
+     * перечитывают и кладут в архив.
+     */
+    const val ENGINE_ADDRESS = 0x7E0
+
+    /** Подпись блока для людей: у двух адресов назначение общепринятое. */
+    fun label(address: Int): String? = when (address) {
+        0x7E0 -> ObdText.pick("двигатель", "engine")
+        0x7E1 -> ObdText.pick("коробка передач", "transmission")
+        else -> null
+    }
 
     /**
      * Разбор ответа блока.
