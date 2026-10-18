@@ -54,6 +54,36 @@ class FeatureAccessTest {
 
     @Test
     /**
+     * Архив: последняя запись бесплатна, история - платная.
+     *
+     * «Что было в прошлый раз» - это и есть то, ради чего архив смотрят, и
+     * оно остаётся бесплатным. Платное начинается там, где сравнивают
+     * несколько чтений: не сбрасывал ли кто-то ошибки перед продажей.
+     */
+    fun freeArchiveShowsTheLastReading() {
+        assertEquals(1, FeatureAccess.FREE.dtcArchiveDepth)
+        assertEquals(FeatureAccess.UNLIMITED_TILES, FeatureAccess.PRO.dtcArchiveDepth)
+    }
+
+    @Test
+    /**
+     * Каждая строчка списка платного на что-то влияет.
+     *
+     * Объявить возможность платной и не спросить про неё ни разу - это обещание
+     * в README, которого нет в коде. Тест держит список и правила вместе.
+     */
+    fun everyPaidFeatureChangesSomething() {
+        ProFeature.entries.forEach { feature ->
+            assertTrue("$feature спрашивается у доступа", FeatureAccess.PRO.allows(feature))
+            assertFalse("$feature закрыта без Pro", FeatureAccess.FREE.allows(feature))
+        }
+        // Две возможности выражены не запретом, а числом - и числа тоже разные.
+        assertTrue(FeatureAccess.FREE.dashboardTileLimit < FeatureAccess.PRO.dashboardTileLimit)
+        assertTrue(FeatureAccess.FREE.dtcArchiveDepth < FeatureAccess.PRO.dtcArchiveDepth)
+    }
+
+    @Test
+    /**
      * Красные линии: это остаётся бесплатным навсегда.
      *
      * Тест выглядит странно - он проверяет, чего в перечислении НЕТ. Но
@@ -77,7 +107,10 @@ class FeatureAccessTest {
             // Искусственное замедление приборов не продаётся ни при каких условиях.
             "POLL_RATE", "FAST_POLL", "REFRESH_RATE",
             // Доступность не продают.
-            "LARGE_TEXT", "LOUPE"
+            "LARGE_TEXT", "LOUPE",
+            // Перестановка и размер плиток - способ разложить то, что уже
+            // показано, а не отдельная возможность.
+            "TILE_REORDER", "TILE_SIZE"
         ).forEach { forbidden ->
             assertFalse("«$forbidden» не может стать платным: это красная линия", forbidden in paid)
         }

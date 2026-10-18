@@ -473,4 +473,5 @@
     <string name="pro_short_archive">Fault archive</string>
 
     <string name="pro_tile_limit">%1$d tiles are shown for free. Remove the limit with Pro - or drop one tile to add another.</string>
+    <string name="archive_hidden">%1$d more entries in the archive</string>
 </resources>

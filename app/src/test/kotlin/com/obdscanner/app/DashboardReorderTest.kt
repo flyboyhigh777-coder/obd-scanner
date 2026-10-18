@@ -1,5 +1,6 @@
 package com.obdscanner.app
 
+import android.content.Context
 import android.os.Looper
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.isRoot
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.obdscanner.app.ui.TileSize
@@ -19,6 +21,8 @@ import com.obdscanner.core.obd.Pids
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import org.junit.rules.RuleChain
+import org.junit.runners.model.Statement
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -40,8 +44,30 @@ import java.io.File
 @Config(sdk = [34], qualifiers = "ru-rRU-w411dp-h891dp-xxhdpi")
 class DashboardReorderTest {
 
+    private val compose = createAndroidComposeRule<MainActivity>()
+
+    /**
+     * Чистые настройки - и обязательно ДО запуска экрана.
+     *
+     * Настройки Robolectric переживают соседний тестовый класс, а приложение
+     * читает их при создании ViewModel, то есть в момент запуска экрана -
+     * раньше, чем выполнился бы обычный @Before. Поэтому очистка стоит
+     * правилом снаружи: сначала она, потом экран.
+     */
     @get:Rule
-    val compose = createAndroidComposeRule<MainActivity>()
+    val rules: RuleChain = RuleChain
+        .outerRule { base, _ ->
+            object : Statement() {
+                override fun evaluate() {
+                    ApplicationProvider.getApplicationContext<Context>()
+                        .getSharedPreferences("obd_scanner", Context.MODE_PRIVATE)
+                        .edit().clear().commit()
+                    base.evaluate()
+                }
+            }
+        }
+        .around(compose)
+
 
     private val outDir = File("build/outputs/roborazzi").apply { mkdirs() }
 

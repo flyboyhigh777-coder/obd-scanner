@@ -429,7 +429,10 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
 @Composable
 private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
     val archive by viewModel.archive.collectAsState()
+    val access by viewModel.access.collectAsState()
     val context = LocalContext.current
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+    proFor?.let { feature -> ProDialog(feature) { proFor = null } }
 
     Panel {
         PanelTitle(stringResource(R.string.archive_title))
@@ -438,7 +441,12 @@ private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
             return@Panel
         }
         Hint(stringResource(R.string.archive_hint))
-        archive.forEachIndexed { index, snapshot ->
+        // Без Pro видна последняя запись - «что было в прошлый раз». Глубже
+        // уже история, и о том, что она есть, честнее сказать, чем молча
+        // обрезать список.
+        val depth = access.dtcArchiveDepth
+        val hidden = (archive.size - depth).coerceAtLeast(0)
+        archive.take(depth).forEachIndexed { index, snapshot ->
             // Пока машина на связи, свежая запись - это ровно то, что уже
             // показано живым списком выше; разворачивать её значит показать
             // одно и то же дважды. Без связи наоборот: разворачиваем, ради
@@ -454,6 +462,11 @@ private fun ArchivePanel(viewModel: ObdViewModel, offline: Boolean) {
                         null
                     )
                 )
+            }
+        }
+        if (hidden > 0) {
+            ProButton(stringResource(R.string.archive_hidden, hidden), Modifier.fillMaxWidth()) {
+                proFor = ProFeature.DTC_ARCHIVE
             }
         }
         TextButton(onClick = viewModel::clearArchive) {

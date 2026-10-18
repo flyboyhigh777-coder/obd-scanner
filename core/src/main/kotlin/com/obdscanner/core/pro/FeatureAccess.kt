@@ -21,7 +21,7 @@ data class FeatureAccess(val pro: Boolean) {
      * что показано в объяснении «что даёт Pro».
      */
     val dashboardTileLimit: Int
-        get() = if (pro) UNLIMITED_TILES else ProPolicy.FREE_TILE_LIMIT
+        get() = if (allows(ProFeature.DASHBOARD_FULL)) UNLIMITED_TILES else ProPolicy.FREE_TILE_LIMIT
 
     /**
      * Влезет ли ещё одна плитка.
@@ -33,6 +33,17 @@ data class FeatureAccess(val pro: Boolean) {
      */
     fun canAddTile(current: Int): Boolean = current < dashboardTileLimit
 
+    /**
+     * Сколько записей архива ошибок показывать.
+     *
+     * Бесплатно - последняя: она и есть «что было в прошлый раз», ради чего
+     * архив в основном и смотрят. Платное здесь - история: сравнить, что
+     * изменилось за полгода, и увидеть, сбрасывал ли кто-то ошибки перед
+     * продажей.
+     */
+    val dtcArchiveDepth: Int
+        get() = if (allows(ProFeature.DTC_ARCHIVE)) UNLIMITED_TILES else FREE_ARCHIVE_DEPTH
+
     companion object {
         /** Всё открыто - так выглядит доступ, когда Pro есть. */
         val PRO = FeatureAccess(pro = true)
@@ -42,6 +53,9 @@ data class FeatureAccess(val pro: Boolean) {
 
         /** Предел, означающий «без ограничения». */
         const val UNLIMITED_TILES = Int.MAX_VALUE
+
+        /** Сколько записей архива видно без Pro. */
+        const val FREE_ARCHIVE_DEPTH = 1
     }
 }
 

@@ -2,6 +2,7 @@ package com.obdscanner.app
 
 import android.content.Context
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
+import com.github.takahirom.roborazzi.captureRoboImage
 import com.obdscanner.app.data.AppSettings
 import com.obdscanner.app.pro.ProAccess
 import com.obdscanner.core.obd.Pids
@@ -25,6 +27,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
 
 /**
  * Граница между бесплатной версией и Pro - на экране.
@@ -37,6 +41,7 @@ import org.robolectric.annotation.Config
  * легко, и на этот случай есть вторая проверка в самой ViewModel.
  */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "ru-rRU-w411dp-h891dp-xxhdpi")
 class ProGateTest {
 
@@ -90,6 +95,13 @@ class ProGateTest {
         assertEquals(FeatureAccess.PRO, ProAccess(AppSettings(context)).access.value)
     }
 
+    private val outDir = File("build/outputs/roborazzi").apply { mkdirs() }
+
+    private fun shot(name: String) {
+        compose.waitForIdle()
+        compose.onAllNodes(isRoot()).onLast().captureRoboImage(File(outDir, "$name.png").path)
+    }
+
     @Test
     fun freeVersionMarksPaidSectionsButKeepsFaultsFree() {
         val vm = viewModel()
@@ -99,6 +111,7 @@ class ProGateTest {
 
         compose.onAllNodesWithText("Проверка").onLast().performClick()
         compose.waitForIdle()
+        shot("60_free_diagnostics")
 
         // Платные разделы помечены, и их в меню ровно два.
         compose.onAllNodesWithText("PRO").assertCountEquals(2)
@@ -107,6 +120,7 @@ class ProGateTest {
         compose.onNodeWithText("Полная проверка").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Это входит в Pro").assertExists()
+        shot("61_free_pro_dialog")
         compose.onNodeWithText("Понятно").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("К разделам").assertDoesNotExist()
