@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.app.data.TripExport
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
@@ -89,6 +90,9 @@ private fun TripSection(viewModel: ObdViewModel) {
     val connection by viewModel.connection.collectAsState()
     val trip by viewModel.trip.collectAsState()
     val units by viewModel.units.collectAsState()
+    val access by viewModel.access.collectAsState()
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+    proFor?.let { feature -> ProDialog(feature) { proFor = null } }
     var exportMessage by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf(false) }
 
@@ -109,13 +113,17 @@ private fun TripSection(viewModel: ObdViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = GaugeAmber, contentColor = TextBright)
             ) { Text(stringResource(R.string.trip_stop)) }
-        } else {
+        } else if (access.allows(ProFeature.TRIP)) {
             Button(
                 onClick = viewModel::startRecording,
                 enabled = connection is ConnectionState.Connected,
                 modifier = Modifier.fillMaxWidth()
             ) { Text(stringResource(R.string.trip_start)) }
             if (connection !is ConnectionState.Connected) Hint(stringResource(R.string.dash_offline))
+        } else {
+            ProButton(stringResource(R.string.trip_start), Modifier.fillMaxWidth()) {
+                proFor = ProFeature.TRIP
+            }
         }
     }
 
@@ -186,6 +194,21 @@ private fun TripSection(viewModel: ObdViewModel) {
 
 @Composable
 private fun AccelerationSection(viewModel: ObdViewModel) {
+    val access by viewModel.access.collectAsState()
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+    if (!access.allows(ProFeature.PERFORMANCE)) {
+        // Замеры считаются из тех же данных, что и приборка, но это уже не
+        // «показать датчик», а посчитанное за человека - отсюда и граница.
+        proFor?.let { feature -> ProDialog(feature) { proFor = null } }
+        Panel {
+            PanelTitle(stringResource(R.string.measure_tab_accel))
+            Hint(stringResource(R.string.pro_short_performance))
+            ProButton(stringResource(R.string.pro_title), Modifier.fillMaxWidth()) {
+                proFor = ProFeature.PERFORMANCE
+            }
+        }
+        return
+    }
     val connection by viewModel.connection.collectAsState()
     val performance by viewModel.performance.collectAsState()
     val units by viewModel.units.collectAsState()

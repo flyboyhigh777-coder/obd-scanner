@@ -76,6 +76,7 @@ fun DashboardScreen(viewModel: ObdViewModel) {
     val showGear by viewModel.showGearTile.collectAsState()
     val showRange by viewModel.showRangeTile.collectAsState()
     val tileSizes by viewModel.dashboardTileSizes.collectAsState()
+    val access by viewModel.access.collectAsState()
     var chooser by remember { mutableStateOf(false) }
     // Над какой плиткой открыт выбор размера. Номер параметра, а не место на
     // экране: от выбора порядок плиток не меняется, но от перетаскивания -
@@ -343,11 +344,23 @@ fun DashboardScreen(viewModel: ObdViewModel) {
                     } else {
                         supported.filter { it.id !in Pids.STATIC && it.unit != ObdUnit.NONE }
                     }
+                    // Бесплатная приборка ограничена по числу плиток. Галочки
+                    // сверх предела не гаснут молча: рядом стоит строка о том,
+                    // сколько их и что с этим делать.
+                    val atLimit = !access.canAddTile(selected.size)
+                    if (atLimit) {
+                        Hint(
+                            stringResource(R.string.pro_tile_limit, access.dashboardTileLimit),
+                            Modifier.padding(bottom = 4.dp)
+                        )
+                    }
                     list.forEach { pid ->
                         val known = pid.id in supportedIds
+                        val chosen = pid.id in selected
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
-                                checked = pid.id in selected,
+                                checked = chosen,
+                                enabled = chosen || !atLimit,
                                 onCheckedChange = { viewModel.toggleDashboardPid(pid.id) }
                             )
                             Column {

@@ -457,4 +457,33 @@
     <string name="dash_tile_size_normal">Обычная</string>
     <string name="dash_tile_size_wide">Пошире</string>
     <string name="dash_tile_size_full">Во всю ширину</string>
+    <string name="pro_badge">PRO</string>
+    <string name="pro_title">Это входит в Pro</string>
+    <string name="pro_close">Понятно</string>
+    <string name="pro_what_is_included">Что ещё даёт Pro:</string>
+    <string name="pro_not_for_sale_yet">Pro пока открыт всем: продажа не настроена. Вы видите приложение так, как его увидит тот, кто не платил, - переключатель на вкладке «Связь».</string>
+    <string name="pro_preview_title">Показать без Pro</string>
+    <string name="pro_preview_hint">Приложение покажет себя так, как его увидит человек без Pro: платные разделы останутся на месте, но с пометкой. Нужно, чтобы видеть, что именно продаётся.</string>
+
+    <string name="pro_feature_report">Полная проверка опрашивает машину целиком и складывает ответы в один отчёт - его можно сохранить в PDF, отправить в сервис или приложить к объявлению о продаже.</string>
+    <string name="pro_feature_modules">Поиск блоков находит то, чего нет в OBD-II: ABS, подушки безопасности, АКПП, электроусилитель. Горит лампа ABS, а обычные приложения показывают «ошибок нет» - потому что смотрят только в двигатель.</string>
+    <string name="pro_feature_custom_pids">Свои параметры: формула, по которой считается значение из ответа блока, перебор режима 22 и снимок «до и после» - видно, какой параметр меняется от нажатия на педаль.</string>
+    <string name="pro_feature_trip">Запись поездки: пробег, средняя и максимальная скорость, время простоя, израсходованное топливо и средний расход - с выгрузкой в таблицу.</string>
+    <string name="pro_feature_performance">Замеры разгона и торможения, оценка мощности и момента по разгону - без полигона и стенда.</string>
+    <string name="pro_feature_counters">Счётчики наработки показывают, сколько раз бортовые тесты успели пройти. По ним видно разницу между исправной машиной и той, у которой ошибки сбросили прямо перед продажей.</string>
+    <string name="pro_feature_battery">Тест пуска показывает просадку напряжения при прокрутке стартером, график напряжения и расчёт утечки тока - то, из-за чего аккумулятор садится за ночь.</string>
+    <string name="pro_feature_dashboard">Приборка без ограничения на число плиток, с перестановкой и выбором размера пальцем.</string>
+    <string name="pro_feature_archive">Архив прочитанных ошибок: видно, что было в прошлый раз и что изменилось.</string>
+
+    <string name="pro_short_report">Полная проверка и отчёт PDF</string>
+    <string name="pro_short_modules">Поиск блоков: ABS, подушки, АКПП</string>
+    <string name="pro_short_custom_pids">Свои параметры и режим 22</string>
+    <string name="pro_short_trip">Запись поездки и расход</string>
+    <string name="pro_short_performance">Замеры разгона и мощности</string>
+    <string name="pro_short_counters">Счётчики наработки тестов</string>
+    <string name="pro_short_battery">Тест пуска и утечка тока</string>
+    <string name="pro_short_dashboard">Приборка без ограничений</string>
+    <string name="pro_short_archive">Архив ошибок</string>
+
+    <string name="pro_tile_limit">Бесплатно показывается %1$d плиток. Снимите ограничение в Pro - или уберите лишнюю, чтобы добавить другую.</string>
 </resources>

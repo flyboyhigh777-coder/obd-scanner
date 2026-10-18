@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.GaugeRed
@@ -55,6 +56,9 @@ import java.util.Locale
  */
 @Composable
 fun BatterySection(viewModel: ObdViewModel) {
+    val access by viewModel.access.collectAsState()
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+    proFor?.let { feature -> ProDialog(feature) { proFor = null } }
     val connection by viewModel.connection.collectAsState()
     val battery by viewModel.battery.collectAsState()
 
@@ -110,9 +114,13 @@ fun BatterySection(viewModel: ObdViewModel) {
                 Text(stringResource(R.string.battery_crank_stop))
             }
             Text(stringResource(R.string.battery_crank_waiting), color = GaugeAmber)
-        } else {
+        } else if (access.allows(ProFeature.BATTERY_TESTS)) {
             Button(onClick = viewModel::startCrankTest, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.battery_crank_start))
+            }
+        } else {
+            ProButton(stringResource(R.string.battery_crank_start), Modifier.fillMaxWidth()) {
+                proFor = ProFeature.BATTERY_TESTS
             }
         }
 

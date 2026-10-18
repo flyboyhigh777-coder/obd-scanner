@@ -233,6 +233,27 @@ class AppSettings(context: Context) {
         )
     }
 
+    /**
+     * Показывать приложение без Pro.
+     *
+     * Пока продавать негде, Pro открыт всем, и это единственный способ
+     * увидеть бесплатную версию - свою же, глазами того, кто не платил.
+     * Когда появится магазин, переключатель уступит место настоящей покупке.
+     */
+    var previewWithoutPro: Boolean
+        get() = prefs.getBoolean(KEY_PREVIEW_FREE, false)
+        set(value) = prefs.edit().putBoolean(KEY_PREVIEW_FREE, value).apply()
+
+    /**
+     * Куплен ли Pro.
+     *
+     * Пишется сюда тем каналом оплаты, который подключён к сборке. Пока
+     * канала нет, значение не читается вовсе - см. ProAccess.
+     */
+    var proPurchased: Boolean
+        get() = prefs.getBoolean(KEY_PRO_PURCHASED, false)
+        set(value) = prefs.edit().putBoolean(KEY_PRO_PURCHASED, value).apply()
+
     /** Какие PID показывать на приборке. Пустой список - значит "набор по умолчанию". */
     var dashboardPids: List<Int>
         get() {
@@ -276,6 +297,8 @@ class AppSettings(context: Context) {
         const val KEY_LAST_BT = "last_bluetooth"
         const val KEY_LAST_SOURCE = "last_source"
         const val KEY_DASH = "dashboard_pids"
+        const val KEY_PREVIEW_FREE = "preview_without_pro"
+        const val KEY_PRO_PURCHASED = "pro_purchased"
         const val KEY_DASH_SIZES = "dashboard_tile_sizes"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"
         const val KEY_VOLTAGE_OFFSET = "voltage_offset"

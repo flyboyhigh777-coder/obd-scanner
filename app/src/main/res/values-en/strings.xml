@@ -444,4 +444,33 @@
     <string name="dash_tile_size_normal">Normal</string>
     <string name="dash_tile_size_wide">Wider</string>
     <string name="dash_tile_size_full">Full width</string>
+    <string name="pro_badge">PRO</string>
+    <string name="pro_title">This is part of Pro</string>
+    <string name="pro_close">Got it</string>
+    <string name="pro_what_is_included">What else Pro gives you:</string>
+    <string name="pro_not_for_sale_yet">Pro is open to everyone for now: sales are not set up. You are seeing the app as someone without Pro would see it - the switch is on the Connection tab.</string>
+    <string name="pro_preview_title">Show without Pro</string>
+    <string name="pro_preview_hint">The app will show itself as a person without Pro sees it: paid sections stay where they are, but marked. Useful to see what is actually being sold.</string>
+
+    <string name="pro_feature_report">The full check queries the whole car and puts the answers into one report - save it as PDF, send it to a workshop or attach it to a sale listing.</string>
+    <string name="pro_feature_modules">Module scan finds what OBD-II does not cover: ABS, airbags, transmission, power steering. The ABS light is on, yet ordinary apps report "no faults" - because they only look at the engine.</string>
+    <string name="pro_feature_custom_pids">Custom parameters: your own formula over the module answer, a mode 22 sweep and a before/after snapshot - you can see which parameter moves when you press the pedal.</string>
+    <string name="pro_feature_trip">Trip recording: distance, average and top speed, idle time, fuel used and average consumption - with CSV export.</string>
+    <string name="pro_feature_performance">Acceleration and braking runs, power and torque estimated from acceleration - without a track or a dyno.</string>
+    <string name="pro_feature_counters">In-use performance counters show how many times the on-board tests have completed. They tell a healthy car from one whose codes were cleared right before the sale.</string>
+    <string name="pro_feature_battery">The cranking test shows the voltage drop while the starter turns, a voltage chart and a parasitic drain estimate - the thing that flattens a battery overnight.</string>
+    <string name="pro_feature_dashboard">A dashboard with no tile limit, with drag-to-reorder and per-tile size.</string>
+    <string name="pro_feature_archive">Fault archive: what was there last time and what changed.</string>
+
+    <string name="pro_short_report">Full check and PDF report</string>
+    <string name="pro_short_modules">Module scan: ABS, airbags, transmission</string>
+    <string name="pro_short_custom_pids">Custom parameters and mode 22</string>
+    <string name="pro_short_trip">Trip recording and fuel use</string>
+    <string name="pro_short_performance">Acceleration and power runs</string>
+    <string name="pro_short_counters">In-use performance counters</string>
+    <string name="pro_short_battery">Cranking test and parasitic drain</string>
+    <string name="pro_short_dashboard">Dashboard without limits</string>
+    <string name="pro_short_archive">Fault archive</string>
+
+    <string name="pro_tile_limit">%1$d tiles are shown for free. Remove the limit with Pro - or drop one tile to add another.</string>
 </resources>

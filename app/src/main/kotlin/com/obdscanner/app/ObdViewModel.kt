@@ -44,8 +44,11 @@ import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.FuelEconomy
 import com.obdscanner.core.obd.FuelType
 import com.obdscanner.core.obd.MonitorStatus
+import com.obdscanner.app.pro.ProAccess
 import com.obdscanner.app.ui.TileSize
 import com.obdscanner.core.obd.ObdPid
+import com.obdscanner.core.pro.FeatureAccess
+import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.core.obd.PidScan
 import com.obdscanner.core.obd.Pids
 import com.obdscanner.core.obd.ScanChange
@@ -394,6 +397,16 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     private val _supportedPids = MutableStateFlow<List<ObdPid>>(emptyList())
     val supportedPids: StateFlow<List<ObdPid>> = _supportedPids.asStateFlow()
 
+    /**
+     * Что сейчас доступно: бесплатная версия или Pro.
+     *
+     * Экраны спрашивают доступ здесь, а решение «платно ли это» принято
+     * один раз в :core (ProFeature). Сами действия тоже проверяют доступ
+     * ещё раз - см. [allows]: забытая кнопка не должна раздавать платное.
+     */
+    private val proAccess = ProAccess(settings)
+    val access: StateFlow<FeatureAccess> = proAccess.access
+
     private val _dashboardPids = MutableStateFlow(settings.dashboardPids)
     val dashboardPids: StateFlow<List<Int>> = _dashboardPids.asStateFlow()
 
@@ -724,6 +737,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Полная проверка: всё, что можно прочитать, одним отчётом. */
     fun runQuickCheck() {
+        if (!allows(ProFeature.REPORT)) return
         if (_quickCheck.value.running) return
         _quickCheck.value = QuickCheckState(running = true)
         quickCheckStop = false
@@ -742,6 +756,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      * файла угадывает кодировку и для кириллицы угадывает неверно.
      */
     fun exportQuickCheck(asPdf: Boolean, onDone: (ExportResult) -> Unit) {
+        if (!allows(ProFeature.REPORT)) return
         val report = _quickCheck.value.report ?: return
         viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
@@ -826,8 +841,25 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         settings.dashboardTileSizes = next.mapValues { it.value.code }
     }
 
+    /**
+     * Вторая линия обороны.
+     *
+     * Первая - экран, который не показывает платную кнопку. Но экранов много,
+     * а забыть один легко, и тогда функция уедет бесплатно. Поэтому каждое
+     * платное действие спрашивает ещё раз, у самого себя.
+     */
+    private fun allows(feature: ProFeature): Boolean = access.value.allows(feature)
+
+    /** Посмотреть приложение глазами того, кто не платил. */
+    fun setPreviewWithoutPro(on: Boolean) = proAccess.setPreviewWithoutPro(on)
+
     fun toggleDashboardPid(id: Int) {
         val current = _dashboardPids.value
+        // Бесплатная приборка ограничена по числу плиток. Убрать плитку можно
+        // всегда - иначе человек, у которого их больше лимита (например,
+        // настроил до того, как ограничение появилось), не смог бы вообще
+        // ничего изменить.
+        if (id !in current && !access.value.canAddTile(current.size)) return
         val next = if (id in current) current - id else current + id
         _dashboardPids.value = next
         settings.dashboardPids = next
@@ -878,6 +910,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     // --- свои параметры ----------------------------------------------------
 
     fun addCustomPid(pid: CustomPid) {
+        if (!allows(ProFeature.CUSTOM_PIDS)) return
         val next = (_customPids.value.filter { it.name != pid.name } + pid).sortedBy { it.name }
         _customPids.value = next
         settings.customPids = next
@@ -898,6 +931,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startRecording() {
+        if (!allows(ProFeature.TRIP)) return
         synchronized(recorderLock) { recorder.clear() }
         recording = true
         _trip.value = TripState(recording = true, stats = emptyStats())
@@ -916,6 +950,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Выгрузка CSV - в отдельной корутине: файл пишется не в рабочем цикле опроса. */
     fun exportTrip(onDone: (ExportResult) -> Unit) {
+        if (!allows(ProFeature.TRIP)) return
         viewModelScope.launch(Dispatchers.IO) {
             val csv = synchronized(recorderLock) { recorder.toCsv() }
             val result = TripExport.save(getApplication<Application>(), csv)
@@ -1226,6 +1261,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Запускает перебор диапазона номеров. */
     fun startPidScan(from: Int, to: Int) {
+        if (!allows(ProFeature.CUSTOM_PIDS)) return
         if (_pidScan.value.running) return
         tasks.trySend(ObdTask.ScanPids(from, to))
     }
@@ -1241,6 +1277,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      * "Ошибки" пусто - потому что режим 03 спрашивает только двигатель.
      */
     fun scanModules() {
+        if (!allows(ProFeature.MODULE_SCAN)) return
         if (_modules.value.running) return
         tasks.trySend(ObdTask.ScanModules)
     }
@@ -1299,6 +1336,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Запоминает текущие значения, чтобы потом сравнить с ними. */
     fun takePidSnapshot() {
+        if (!allows(ProFeature.CUSTOM_PIDS)) return
         tasks.trySend(ObdTask.SnapshotPids)
     }
 
@@ -1332,6 +1370,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Запускает тест пуска: нажать, потом поворачивать ключ. */
     fun startCrankTest() {
+        if (!allows(ProFeature.BATTERY_TESTS)) return
         if (crankTestRunning) return
         tasks.trySend(ObdTask.CrankTest)
     }

@@ -87,6 +87,8 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     val boundToWifi by viewModel.boundToWifi.collectAsState()
     val bluetoothMethod by viewModel.bluetoothMethod.collectAsState()
     val adapter by viewModel.adapter.collectAsState()
+    val access by viewModel.access.collectAsState()
+    val previewWithoutPro = !access.pro
 
     // Открываемся на том способе, которым подключались в прошлый раз.
     var source by remember {
@@ -311,6 +313,26 @@ fun ConnectScreen(viewModel: ObdViewModel) {
         }
 
         AdapterPanel(viewModel, connection)
+
+        // Переключатель «показать без Pro» стоит здесь, среди настроек, а не
+        // прячется в тайной комбинации: пока продавать негде, Pro открыт
+        // всем, и скрывать от человека, что он видит полную версию, незачем.
+        // Когда появится магазин, на это место встанет покупка.
+        Panel {
+            PanelTitle(stringResource(R.string.pro_title))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = previewWithoutPro,
+                    onCheckedChange = viewModel::setPreviewWithoutPro
+                )
+                Text(
+                    stringResource(R.string.pro_preview_title),
+                    color = TextBright,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+            Hint(stringResource(R.string.pro_preview_hint))
+        }
 
         Panel {
             PanelTitle(stringResource(R.string.connect_settings))

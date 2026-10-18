@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.core.pro.ProFeature
 import androidx.compose.ui.text.style.TextOverflow
 import com.obdscanner.app.ui.theme.cappedSp
 import com.obdscanner.app.ui.theme.CirclePlum
@@ -130,6 +132,10 @@ private fun DiagnosticsMenu(viewModel: ObdViewModel, onOpen: (DiagSection) -> Un
     val live by viewModel.live.collectAsState()
     val tests by viewModel.tests.collectAsState()
     val quick by viewModel.quickCheck.collectAsState()
+    val access by viewModel.access.collectAsState()
+    // Какой платный раздел объясняем. Платный раздел остаётся в меню и
+    // открывается - только не в себя, а в рассказ о том, что он делает.
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
 
     Column(
         Modifier
@@ -184,13 +190,21 @@ private fun DiagnosticsMenu(viewModel: ObdViewModel, onOpen: (DiagSection) -> Un
                 stateColor = if (codeCount > 0) GaugeRed else GaugeGreen,
                 onClick = { onOpen(DiagSection.CODES) }
             )
+            val reportPro = !access.allows(ProFeature.REPORT)
             MenuRow(
                 title = stringResource(R.string.diag_quick),
                 description = stringResource(R.string.diag_quick_desc),
                 glyph = RowGlyph.OK,
                 circleColor = CircleSage,
-                state = if (quick.report != null) stringResource(R.string.diag_state_ready) else null,
-                onClick = { onOpen(DiagSection.QUICK_CHECK) }
+                state = when {
+                    reportPro -> proBadge()
+                    quick.report != null -> stringResource(R.string.diag_state_ready)
+                    else -> null
+                },
+                stateColor = if (reportPro) ProBadgeColor else TextMuted,
+                onClick = {
+                    if (reportPro) proFor = ProFeature.REPORT else onOpen(DiagSection.QUICK_CHECK)
+                }
             )
             MenuRow(
                 title = stringResource(R.string.diag_monitor_tests),
@@ -216,17 +230,27 @@ private fun DiagnosticsMenu(viewModel: ObdViewModel, onOpen: (DiagSection) -> Un
                     ?.let { stringResource(R.string.diag_state_sensors, it) },
                 onClick = { onOpen(DiagSection.O2_SENSORS) }
             )
+            val countersPro = !access.allows(ProFeature.COUNTERS)
             MenuRow(
                 title = stringResource(R.string.diag_counters),
                 description = stringResource(R.string.diag_counters_desc),
                 glyph = RowGlyph.BARS,
                 circleColor = if (tests.performance == null) CircleSlate else CircleSteel,
-                state = tests.performance?.ignitionCycles?.let {
-                    stringResource(R.string.diag_state_cycles, it)
+                state = if (countersPro) {
+                    proBadge()
+                } else {
+                    tests.performance?.ignitionCycles?.let {
+                        stringResource(R.string.diag_state_cycles, it)
+                    }
                 },
-                onClick = { onOpen(DiagSection.COUNTERS) }
+                stateColor = if (countersPro) ProBadgeColor else TextMuted,
+                onClick = {
+                    if (countersPro) proFor = ProFeature.COUNTERS else onOpen(DiagSection.COUNTERS)
+                }
             )
         }
+
+        proFor?.let { feature -> ProDialog(feature) { proFor = null } }
 
         if (!connected) {
             Panel { Hint(stringResource(R.string.tests_not_connected)) }

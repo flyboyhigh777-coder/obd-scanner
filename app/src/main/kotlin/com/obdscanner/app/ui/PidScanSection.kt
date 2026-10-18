@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
 import com.obdscanner.app.ui.theme.Hint
@@ -48,8 +50,25 @@ import com.obdscanner.core.obd.PidScan
 @Composable
 fun PidScanSection(viewModel: ObdViewModel, onUseHit: (Int) -> Unit) {
     val scan by viewModel.pidScan.collectAsState()
+    val access by viewModel.access.collectAsState()
     var from by rememberSaveable { mutableStateOf("F400") }
     var to by rememberSaveable { mutableStateOf("F4FF") }
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+    proFor?.let { feature -> ProDialog(feature) { proFor = null } }
+
+    // Раздел целиком платный: это не «посмотреть датчик», а инструмент
+    // исследования чужого блока. Панель остаётся на месте и объясняет себя -
+    // иначе человек не узнает, что приложение так умеет.
+    if (!access.allows(ProFeature.CUSTOM_PIDS)) {
+        Panel {
+            PanelTitle(stringResource(R.string.scan_title))
+            Hint(stringResource(R.string.scan_hint))
+            ProButton(stringResource(R.string.pro_title), Modifier.fillMaxWidth()) {
+                proFor = ProFeature.CUSTOM_PIDS
+            }
+        }
+        return
+    }
 
     Panel {
         PanelTitle(stringResource(R.string.scan_title))

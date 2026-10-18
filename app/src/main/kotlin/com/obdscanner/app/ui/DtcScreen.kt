@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.obdscanner.app.ConnectionState
 import com.obdscanner.app.ObdViewModel
 import com.obdscanner.app.R
+import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.app.data.DocumentationDtc
 import com.obdscanner.app.ui.theme.GaugeAmber
 import com.obdscanner.app.ui.theme.GaugeGreen
@@ -325,6 +326,10 @@ private fun PhraseList(title: String, phrases: List<String>) {
 @Composable
 private fun ModulesPanel(viewModel: ObdViewModel) {
     val modules by viewModel.modules.collectAsState()
+    val access by viewModel.access.collectAsState()
+    var proFor by remember { mutableStateOf<ProFeature?>(null) }
+
+    proFor?.let { feature -> ProDialog(feature) { proFor = null } }
 
     Panel {
         PanelTitle(stringResource(R.string.modules_title))
@@ -339,8 +344,13 @@ private fun ModulesPanel(viewModel: ObdViewModel) {
             if (modules.running) {
                 Button(onClick = viewModel::stopModuleScan) { Text(stringResource(R.string.modules_stop)) }
                 CircularProgressIndicator()
-            } else {
+            } else if (access.allows(ProFeature.MODULE_SCAN)) {
                 Button(onClick = viewModel::scanModules) { Text(stringResource(R.string.modules_scan)) }
+            } else {
+                // Кнопка остаётся на месте и ведёт в объяснение: пропавший
+                // раздел читается как «приложение не умеет», и человек идёт
+                // ставить другое вместо того, чтобы заплатить.
+                ProButton(stringResource(R.string.modules_scan)) { proFor = ProFeature.MODULE_SCAN }
             }
         }
 
