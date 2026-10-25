@@ -453,7 +453,7 @@
     <string name="pro_preview_hint">The app will show itself as a person without Pro sees it: paid sections stay where they are, but marked. Useful to see what is actually being sold.</string>
 
     <string name="pro_feature_report">The full check queries the whole car and puts the answers into one report - save it as PDF, send it to a workshop or attach it to a sale listing.</string>
-    <string name="pro_feature_modules">Module scan finds what OBD-II does not cover: ABS, airbags, transmission, power steering. The ABS light is on, yet ordinary apps report "no faults" - because they only look at the engine.</string>
+    <string name="pro_feature_modules">Module scan finds what OBD-II does not cover: ABS, airbags, transmission, power steering. The ABS light is on, yet ordinary apps report \"no faults\" - because they only look at the engine.</string>
     <string name="pro_feature_custom_pids">Custom parameters: your own formula over the module answer, a mode 22 sweep and a before/after snapshot - you can see which parameter moves when you press the pedal.</string>
     <string name="pro_feature_trip">Trip recording: distance, average and top speed, idle time, fuel used and average consumption - with CSV export.</string>
     <string name="pro_feature_performance">Acceleration and braking runs, power and torque estimated from acceleration - without a track or a dyno.</string>
