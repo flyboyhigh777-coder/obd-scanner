@@ -89,6 +89,8 @@ fun ConnectScreen(viewModel: ObdViewModel) {
     val adapter by viewModel.adapter.collectAsState()
     val access by viewModel.access.collectAsState()
     val previewWithoutPro = !access.pro
+    val tripLogEnabled by viewModel.tripLogEnabled.collectAsState()
+    val tripLogInterval by viewModel.tripLogIntervalSeconds.collectAsState()
 
     // Открываемся на том способе, которым подключались в прошлый раз.
     var source by remember {
@@ -313,6 +315,34 @@ fun ConnectScreen(viewModel: ObdViewModel) {
         }
 
         AdapterPanel(viewModel, connection)
+
+        // Журнал поездок: его настройки стоят рядом со связью, потому что
+        // включается он вместе с ней и пишет всё время, пока она есть.
+        Panel {
+            PanelTitle(stringResource(R.string.triplog_setting_title))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = tripLogEnabled, onCheckedChange = viewModel::setTripLogEnabled)
+                Text(
+                    stringResource(R.string.triplog_setting_title),
+                    color = TextBright,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+            Hint(stringResource(R.string.triplog_setting_hint))
+            if (tripLogEnabled) {
+                // Промежуток: чаще - подробнее график, реже - короче таблица.
+                // Секунда даёт около 3600 строк на час езды, минута - шестьдесят.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1, 5, 15, 60).forEach { seconds ->
+                        SegmentButton(
+                            stringResource(R.string.triplog_interval, seconds),
+                            seconds == tripLogInterval,
+                            Modifier.weight(1f)
+                        ) { viewModel.setTripLogIntervalSeconds(seconds) }
+                    }
+                }
+            }
+        }
 
         // Переключатель «показать без Pro» стоит здесь, среди настроек, а не
         // прячется в тайной комбинации: пока продавать негде, Pro открыт

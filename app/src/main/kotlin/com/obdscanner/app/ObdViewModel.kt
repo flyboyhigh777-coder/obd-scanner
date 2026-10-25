@@ -44,10 +44,14 @@ import com.obdscanner.core.obd.CustomPid
 import com.obdscanner.core.obd.FuelEconomy
 import com.obdscanner.core.obd.FuelType
 import com.obdscanner.core.obd.MonitorStatus
+import com.obdscanner.app.data.TripLogEntry
+import com.obdscanner.app.data.TripLogStore
+import com.obdscanner.app.data.TripLogWriter
 import com.obdscanner.app.pro.ProAccess
 import com.obdscanner.app.ui.TileSize
 import com.obdscanner.core.obd.ObdPid
 import com.obdscanner.core.pro.FeatureAccess
+import com.obdscanner.core.trip.TripLog
 import com.obdscanner.core.pro.ProFeature
 import com.obdscanner.core.obd.PidScan
 import com.obdscanner.core.obd.Pids
@@ -65,6 +69,7 @@ import com.obdscanner.core.session.ElmAdapter
 import com.obdscanner.core.session.ObdChannel
 import com.obdscanner.core.session.ObdSession
 import com.obdscanner.core.trip.TripRecorder
+import com.obdscanner.core.trip.TripSample
 import com.obdscanner.core.trip.TripStats
 import com.obdscanner.core.vehicle.GearEstimator
 import com.obdscanner.core.vehicle.TyreSize
@@ -246,6 +251,20 @@ data class VehicleState(
     val counters: Map<Int, Double> = emptyMap()
 )
 
+/**
+ * Открытая для просмотра поездка.
+ *
+ * Разобранный файл вместе с тем, что по нему посчитано: какие параметры в нём
+ * есть и каковы итоги. Считается один раз при открытии - на экране этим
+ * пользуются много раз, а файл не меняется.
+ */
+data class OpenTripLog(
+    val entry: TripLogEntry,
+    val file: TripLog.File,
+    val parameters: List<ObdPid>,
+    val stats: TripStats
+)
+
 data class TripState(
     val recording: Boolean = false,
     val stats: TripStats = TripRecorder().stats(),
@@ -409,6 +428,39 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _dashboardPids = MutableStateFlow(settings.dashboardPids)
     val dashboardPids: StateFlow<List<Int>> = _dashboardPids.asStateFlow()
+
+    /**
+     * Журнал поездок: что уже записано и что открыто для просмотра.
+     *
+     * Список живёт отдельно от самой записи: пишется журнал в рабочем потоке
+     * опроса, а смотрят его на экране, и в разное время.
+     */
+    private val tripLogStore = TripLogStore(application)
+    private val _tripLogs = MutableStateFlow<List<TripLogEntry>>(emptyList())
+    val tripLogs: StateFlow<List<TripLogEntry>> = _tripLogs.asStateFlow()
+
+    private val _openTripLog = MutableStateFlow<OpenTripLog?>(null)
+    val openTripLog: StateFlow<OpenTripLog?> = _openTripLog.asStateFlow()
+
+    /** Журнал текущей поездки. Пишется из рабочего потока, поэтому @Volatile. */
+    @Volatile private var tripLogWriter: TripLogWriter? = null
+
+    private val _tripLogEnabled = MutableStateFlow(settings.tripLogEnabled)
+    val tripLogEnabled: StateFlow<Boolean> = _tripLogEnabled.asStateFlow()
+
+    private val _tripLogInterval = MutableStateFlow(settings.tripLogIntervalSeconds)
+    val tripLogIntervalSeconds: StateFlow<Int> = _tripLogInterval.asStateFlow()
+
+    fun setTripLogEnabled(on: Boolean) {
+        settings.tripLogEnabled = on
+        _tripLogEnabled.value = on
+        if (!on) finishTripLog()
+    }
+
+    fun setTripLogIntervalSeconds(seconds: Int) {
+        settings.tripLogIntervalSeconds = seconds
+        _tripLogInterval.value = settings.tripLogIntervalSeconds
+    }
 
     /** Ширина плиток приборки. Чего в карте нет - то обычного размера. */
     private val _dashboardTileSizes = MutableStateFlow(
@@ -598,6 +650,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         worker?.cancel()
         worker = null
         recording = false
+        finishTripLog()
         _connection.value = ConnectionState.Disconnected
         _trip.value = _trip.value.copy(recording = false)
     }
@@ -1489,6 +1542,90 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         if (recording && values.isNotEmpty()) {
             synchronized(recorderLock) { recorder.add(now, _live.value.values) }
             _trip.value = _trip.value.copy(stats = currentStats())
+        }
+        if (values.isNotEmpty()) writeTripLog(now)
+    }
+
+    /**
+     * Журнал пишется сам, без кнопки.
+     *
+     * Смысл журнала в том, что он уже записан, когда вопрос возник: «какая
+     * была температура на том подъёме». Кнопка «начать запись» означала бы,
+     * что её забыли нажать ровно в ту поездку, когда журнал понадобился.
+     *
+     * Поездка начинается с первого ответа машины и заканчивается вместе со
+     * связью. Пишется один замер за выбранный промежуток - опрос идёт по
+     * несколько раз в секунду, и без прореживания получились бы мегабайты в
+     * час.
+     */
+    private fun writeTripLog(now: Long) {
+        if (!_tripLogEnabled.value) return
+        val writer = tripLogWriter ?: startTripLog(now) ?: return
+        writer.append(TripSample(now, _live.value.values), _tripLogInterval.value * 1000L)
+    }
+
+    private fun startTripLog(now: Long): TripLogWriter? {
+        val columns = _live.value.values.keys.sorted()
+        if (columns.isEmpty()) return null
+        return tripLogStore.start(now, columns, dieselFuel).also { tripLogWriter = it }
+    }
+
+    /**
+     * Связь кончилась - поездка закончилась.
+     *
+     * Слишком короткая запись удаляется сама: подключился, посмотрел
+     * напряжение и вышел - это не поездка, а строка мусора в списке.
+     */
+    private fun finishTripLog() {
+        val writer = tripLogWriter ?: return
+        tripLogWriter = null
+        // Закрытие - это дозапись итога, удаление слишком короткой записи и
+        // чистка старых поездок, то есть работа с файлами. В главном потоке
+        // ей не место: связь рвут нажатием кнопки, и подвисший на этом экран
+        // человек воспримет как поломку.
+        viewModelScope.launch(Dispatchers.IO) {
+            val kept = writer.close()
+            if (kept) tripLogStore.trim()
+            val logs = tripLogStore.list()
+            withContext(Dispatchers.Main) { _tripLogs.value = logs }
+        }
+    }
+
+    fun refreshTripLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val logs = tripLogStore.list()
+            withContext(Dispatchers.Main) { _tripLogs.value = logs }
+        }
+    }
+
+    /** Открыть поездку: файл читается с диска, поэтому не в главном потоке. */
+    fun openTripLog(entry: TripLogEntry) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = tripLogStore.read(entry)
+            val opened = file?.let {
+                OpenTripLog(
+                    entry = entry,
+                    file = it,
+                    parameters = TripLog.recorded(it),
+                    stats = TripRecorder().apply { it.samples.forEach(::add) }.stats(dieselFuel)
+                )
+            }
+            withContext(Dispatchers.Main) { _openTripLog.value = opened }
+        }
+    }
+
+    fun closeTripLog() {
+        _openTripLog.value = null
+    }
+
+    fun deleteTripLog(entry: TripLogEntry) {
+        viewModelScope.launch(Dispatchers.IO) {
+            tripLogStore.delete(entry)
+            val logs = tripLogStore.list()
+            withContext(Dispatchers.Main) {
+                _tripLogs.value = logs
+                if (_openTripLog.value?.entry?.name == entry.name) _openTripLog.value = null
+            }
         }
     }
 

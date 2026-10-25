@@ -77,7 +77,14 @@ fun MeasureScreen(viewModel: ObdViewModel) {
             }
         }
         when (section) {
-            0 -> TripSection(viewModel)
+            0 -> {
+                // Пока открыта прошлая поездка, панель записи сверху только
+                // мешает: человек пришёл смотреть историю, а не начинать
+                // новую запись.
+                val openLog by viewModel.openTripLog.collectAsState()
+                if (openLog == null) TripSection(viewModel)
+                TripLogSection(viewModel)
+            }
             1 -> AccelerationSection(viewModel)
             else -> BatterySection(viewModel)
         }

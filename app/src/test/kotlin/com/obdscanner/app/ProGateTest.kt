@@ -64,15 +64,16 @@ class ProGateTest {
 
     @After
     /**
-     * И убрать за собой.
+     * Вернуть Pro на место.
      *
      * Настройки Robolectric переживают не только соседний тест, но и соседний
-     * класс: без этого приборка, перенастроенная здесь ради проверки лимита,
-     * доставалась бы следующему тесту - и он падал бы на том, что не нашёл
-     * плитку, которую сам не трогал.
+     * класс, и очистка файла тут не помогает: приложение в соседнем тесте
+     * поднимается раньше неё. А вот запись через то же приложение помогает -
+     * поэтому возвращаем так же, как меняли. Без этого соседние тесты видели
+     * бы бесплатную версию и падали на том, чего сами не включали.
      */
-    fun restoreSettings() {
-        clearSettings()
+    fun restorePro() {
+        runCatching { viewModel().setPreviewWithoutPro(false) }
     }
 
     private fun viewModel() = ViewModelProvider(compose.activity)[ObdViewModel::class.java]
@@ -156,6 +157,13 @@ class ProGateTest {
     /** бесплатная приборка ограничена по числу плиток, но убрать плитку можно всегда. */
     fun freeDashboardKeepsItsTileLimit() {
         val vm = viewModel()
+        // Что было до теста - то и должно остаться после.
+        //
+        // Очистки настроек тут мало: приложение в тесте поднимается раньше
+        // неё, настройки переживают тестовый класс, и соседний тест, который
+        // опирается на приборку по умолчанию, падал бы на нашей. Поэтому
+        // возвращаем всё тем же способом, которым меняли.
+        val original = vm.dashboardPids.value.toList()
         vm.setPreviewWithoutPro(true)
         compose.waitForIdle()
 
@@ -186,5 +194,15 @@ class ProGateTest {
         // С Pro ограничения нет.
         vm.setPreviewWithoutPro(false)
         assertEquals(FeatureAccess.UNLIMITED_TILES, vm.access.value.dashboardTileLimit)
+
+        // И возвращаем приборку как была - уже без лимита, иначе лишние
+        // плитки обратно не встанут.
+        //
+        // Снимаем все и добавляем заново в исходном порядке: плитки встают в
+        // конец списка, и вернуть набор мало - соседний тест проверяет
+        // перестановку и опирается на то, в каком порядке они стояли.
+        vm.dashboardPids.value.toList().forEach { vm.toggleDashboardPid(it) }
+        original.forEach { vm.toggleDashboardPid(it) }
+        assertEquals("приборка возвращена как была", original, vm.dashboardPids.value)
     }
 }

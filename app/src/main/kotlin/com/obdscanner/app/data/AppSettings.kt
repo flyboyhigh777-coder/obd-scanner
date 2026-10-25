@@ -254,6 +254,27 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_PRO_PURCHASED, false)
         set(value) = prefs.edit().putBoolean(KEY_PRO_PURCHASED, value).apply()
 
+    /**
+     * Вести ли журнал поездки.
+     *
+     * По умолчанию да: смысл журнала в том, что он уже записан, когда
+     * вопрос возник. Включать его перед каждой поездкой - значит не включить
+     * ровно в тот раз, когда он понадобится.
+     */
+    var tripLogEnabled: Boolean
+        get() = prefs.getBoolean(KEY_LOG_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_LOG_ENABLED, value).apply()
+
+    /**
+     * Как часто записывать замер, секунды.
+     *
+     * Пять секунд - это 720 строк на час езды: температура и обороты видны
+     * подробно, а файл остаётся таблицей, в которой что-то можно разглядеть.
+     */
+    var tripLogIntervalSeconds: Int
+        get() = prefs.getInt(KEY_LOG_INTERVAL, DEFAULT_LOG_INTERVAL).coerceIn(1, 300)
+        set(value) = prefs.edit().putInt(KEY_LOG_INTERVAL, value.coerceIn(1, 300)).apply()
+
     /** Какие PID показывать на приборке. Пустой список - значит "набор по умолчанию". */
     var dashboardPids: List<Int>
         get() {
@@ -298,6 +319,9 @@ class AppSettings(context: Context) {
         const val KEY_LAST_SOURCE = "last_source"
         const val KEY_DASH = "dashboard_pids"
         const val KEY_PREVIEW_FREE = "preview_without_pro"
+        const val KEY_LOG_ENABLED = "trip_log_enabled"
+        const val KEY_LOG_INTERVAL = "trip_log_interval"
+        const val DEFAULT_LOG_INTERVAL = 5
         const val KEY_PRO_PURCHASED = "pro_purchased"
         const val KEY_DASH_SIZES = "dashboard_tile_sizes"
         const val KEY_AUTO_RECONNECT = "auto_reconnect"

@@ -474,4 +474,25 @@
 
     <string name="pro_tile_limit">%1$d tiles are shown for free. Remove the limit with Pro - or drop one tile to add another.</string>
     <string name="archive_hidden">%1$d more entries in the archive</string>
+    <string name="triplog_title">Trip log</string>
+    <string name="triplog_hint">The app records readings all the way by itself — you can look at them here afterwards. Recording starts with the car\'s first answer and ends with the connection.</string>
+    <string name="triplog_empty">No trips yet. Connect to the car and drive — the log writes itself.</string>
+    <string name="triplog_unfinished">recording not finished</string>
+    <string name="triplog_minutes">%1$d min</string>
+    <string name="triplog_km">%1$s km</string>
+    <string name="triplog_max_coolant">up to %1$d °C</string>
+    <string name="triplog_back">Back to trips</string>
+    <string name="triplog_samples">Samples in this trip: %1$d</string>
+    <string name="triplog_parameter">What to look at</string>
+    <string name="triplog_no_data">This parameter was not recorded on this trip.</string>
+    <string name="triplog_min">Minimum</string>
+    <string name="triplog_avg">Average</string>
+    <string name="triplog_max">Maximum</string>
+    <string name="triplog_start">start</string>
+    <string name="triplog_share">Share</string>
+    <string name="triplog_delete">Delete</string>
+    <string name="triplog_share_hint">The file is a plain table: it opens in Excel and in spreadsheet apps on the phone. Same numbers as here, plus the time of day of every sample.</string>
+    <string name="triplog_setting_title">Trip log</string>
+    <string name="triplog_setting_hint">Record readings while driving so you can review them on the Measurements tab. The last 20 trips are kept.</string>
+    <string name="triplog_interval">A sample every %1$d s</string>
 </resources>

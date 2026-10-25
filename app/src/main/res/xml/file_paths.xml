@@ -2,4 +2,7 @@
 <paths>
     <cache-path name="trips" path="trips/" />
     <cache-path name="reports" path="reports/" />
+    <!-- Журналы поездок лежат во внутренней памяти приложения: их пишут всю
+         дорогу, и кеш система может почистить прямо посреди поездки. -->
+    <files-path name="triplog" path="triplog/" />
 </paths>

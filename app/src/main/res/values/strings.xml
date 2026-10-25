@@ -487,4 +487,25 @@
 
     <string name="pro_tile_limit">Бесплатно показывается %1$d плиток. Снимите ограничение в Pro - или уберите лишнюю, чтобы добавить другую.</string>
     <string name="archive_hidden">Ещё записей в архиве: %1$d</string>
+    <string name="triplog_title">Журнал поездок</string>
+    <string name="triplog_hint">Приложение само записывает показания всю дорогу — потом их можно посмотреть здесь. Запись начинается с первого ответа машины и заканчивается вместе со связью.</string>
+    <string name="triplog_empty">Поездок пока нет. Подключитесь к машине и поезжайте — журнал запишется сам.</string>
+    <string name="triplog_unfinished">запись не закончена</string>
+    <string name="triplog_minutes">%1$d мин</string>
+    <string name="triplog_km">%1$s км</string>
+    <string name="triplog_max_coolant">до %1$d °C</string>
+    <string name="triplog_back">К списку поездок</string>
+    <string name="triplog_samples">Замеров за поездку: %1$d</string>
+    <string name="triplog_parameter">Что смотрим</string>
+    <string name="triplog_no_data">Этот параметр в поездке не записан.</string>
+    <string name="triplog_min">Минимум</string>
+    <string name="triplog_avg">Среднее</string>
+    <string name="triplog_max">Максимум</string>
+    <string name="triplog_start">начало</string>
+    <string name="triplog_share">Поделиться</string>
+    <string name="triplog_delete">Удалить</string>
+    <string name="triplog_share_hint">Файл — обычная таблица: открывается в Excel и в редакторах таблиц на телефоне. Там те же числа, что и здесь, плюс время суток каждого замера.</string>
+    <string name="triplog_setting_title">Журнал поездок</string>
+    <string name="triplog_setting_hint">Записывать показания в дороге, чтобы посмотреть их потом на вкладке «Замеры». Хранятся последние 20 поездок.</string>
+    <string name="triplog_interval">Запись раз в %1$d с</string>
 </resources>

@@ -129,6 +129,12 @@ class TeyesCc3LayoutTest {
         compose.waitForIdle()
         // Экран магнитолы низкий: плитки лежат ниже сгиба, и без прокрутки на
         // снимке была бы одна шкала оборотов.
+        // Понятное сообщение вместо «узел не найден»: если приборка окажется
+        // чужой, из падения будет видно, чья она.
+        assertTrue(
+            "на приборке есть нагрузка: ${vm.dashboardPids.value}, доступ=${vm.access.value}",
+            Pids.ENGINE_LOAD.id in vm.dashboardPids.value
+        )
         compose.onNodeWithText("Нагрузка на двигатель").performScrollTo()
         shot("34_teyes_tile_sizes")
         compose.onNodeWithText("Температура ОЖ").assertExists()
