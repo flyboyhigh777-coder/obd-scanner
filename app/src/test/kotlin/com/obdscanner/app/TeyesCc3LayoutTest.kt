@@ -173,5 +173,11 @@ class TeyesCc3LayoutTest {
         compose.onNodeWithText("Кодов в блоке: 2").assertExists()
         compose.onAllNodesWithText("Как отказало: замыкание на массу").onFirst().assertExists()
         shot("33_teyes_modules")
+
+        // Блок двигателя: коды по UDS, которых в обычном чтении выше нет.
+        // На экране магнитолы он последний, то есть дальше всех под сгибом.
+        compose.onNodeWithText("P0130-29").performScrollTo()
+        compose.onNodeWithText("Кодов в блоке: 3").assertExists()
+        shot("35_teyes_modules_engine")
     }
 }
