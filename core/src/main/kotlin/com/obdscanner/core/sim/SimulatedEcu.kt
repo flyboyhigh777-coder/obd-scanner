@@ -193,6 +193,12 @@ class SimulatedEcu(
             val chunk = data.copyOfRange(index, min(index + take, data.size))
             text.append("%X:".format(line))
             text.append(chunk.joinToString("") { "%02X".format(it) })
+            // Последний кадр CAN уходит на шину длиной в восемь байт в любом
+            // случае, и хвост добивается заполнителем - адаптер печатает его
+            // как есть. Без этого симулятор был аккуратнее настоящего железа, и
+            // на нём не ловилось ровно то, на чём спотыкалась живая машина:
+            // добивка читалась как ещё один код.
+            repeat(take - chunk.size) { text.append("%02X".format(PADDING)) }
             text.append('\r')
             index += chunk.size
             line++
@@ -218,6 +224,11 @@ class SimulatedEcu(
             0x09 -> respondVehicleInfo(command)
             0x0A -> dtcFrame(0x4A, permanentDtcs)
             0x22 -> respondExtendedData(command)
+            // Блок двигателя отвечает не только на OBD-II: запрос кодов по UDS
+            // он понимает так же, как любой другой блок на шине. Так ведёт себя
+            // живая машина - поиск блоков находит её на 7E0 и показывает коды,
+            // которых в режиме 03 нет.
+            0x19, 0x18 -> respondModule(command)
             else -> noData()
         }
     }
@@ -542,7 +553,21 @@ class SimulatedEcu(
         val CVN = intArrayOf(0x5A, 0x3C, 0x11, 0x08)
 
         /** Выдуманные блоки на выдуманных адресах - см. respondModule. */
+        /** Чем адаптер добивает кадр до восьми байт. */
+        const val PADDING = 0xAA
+
         val MODULES = mapOf(
+            // Блок двигателя. Один код тут нарочно повторён: на запрос по
+            // широкому фильтру приёма отвечает не только он, и один и тот же
+            // код приходит дважды. В списке он обязан остаться одной строкой.
+            0x7E0 to SimModule(
+                uds = udsCodes(
+                    "P0106" to 0x11,
+                    "P0113" to 0x13,
+                    "P0106" to 0x11,
+                    "P0130" to 0x29,
+                )
+            ),
             0x760 to SimModule(uds = udsCodes("C0031" to 0x11, "C0040" to 0x08)),
             0x7A0 to SimModule(refuse = 0x33),
             0x730 to SimModule(kwp = kwpCodes("B1234")),

@@ -211,6 +211,16 @@ class ModuleScanTest {
         assertNotNull("отказавший блок - тоже находка", refused)
         assertTrue(refused!!.reply is ModuleReply.Refused)
 
+        // Блок двигателя отвечает и по UDS. Проверяем на нём сразу две вещи,
+        // ради которых и городился разбор: добивка кадра не стала кодом, а
+        // повторённый код остался одной строкой.
+        val engine = byAddress[0x7E0]
+        assertNotNull("блок двигателя найден: ${found.map { it.hex }}", engine)
+        assertEquals(
+            listOf("P0106-11", "P0113-13", "P0130-29"),
+            engine!!.dtcs.map { it.full }
+        )
+
         val kwp = byAddress[0x730]
         assertNotNull("блок на KWP2000 найден", kwp)
         assertEquals(listOf("B1234"), kwp!!.dtcs.map { it.full })

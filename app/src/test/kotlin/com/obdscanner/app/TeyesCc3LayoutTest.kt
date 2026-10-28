@@ -168,9 +168,10 @@ class TeyesCc3LayoutTest {
         // чужого текста.
         compose.onNodeWithText("Блок по адресу 760").performScrollTo()
         compose.onNodeWithText("Системы блока: тормоза и шасси (ABS, ESP)").assertExists()
-        compose.onNodeWithText("Протокол: UDS (ISO 14229)").assertExists()
+        // По UDS отвечает и блок двигателя, поэтому строка не одна.
+        compose.onAllNodesWithText("Протокол: UDS (ISO 14229)").onFirst().assertExists()
         compose.onNodeWithText("Кодов в блоке: 2").assertExists()
-        compose.onNodeWithText("Как отказало: замыкание на массу").assertExists()
+        compose.onAllNodesWithText("Как отказало: замыкание на массу").onFirst().assertExists()
         shot("33_teyes_modules")
     }
 }

@@ -202,6 +202,31 @@ class ObdAppFlowTest {
         compose.onNodeWithText("Бортовые тесты").performScrollTo()
         shot("07_dtc_monitors")
 
+        // Поиск блоков вне OBD-II - ради него сюда и лезут с живой машиной:
+        // лампа ABS горит, а режим 03 про неё ничего не знает. Заодно это
+        // единственное место, где весь путь виден целиком - от текста
+        // адаптера с добивкой кадра до строки на экране.
+        compose.onNodeWithText("Найти блоки").performScrollTo().performClick()
+        pumpUntil(90_000, "перебор адресов блоков") { vm.modules.value.loaded }
+        val engine = vm.modules.value.found.firstOrNull { it.address == 0x7E0 }
+        assertNotNull("блок двигателя найден: ${vm.modules.value.found.map { it.hex }}", engine)
+        assertEquals(
+            "добивка кадра не код, а повтор - не вторая неисправность",
+            listOf("P0106-11", "P0113-13", "P0130-29"),
+            engine!!.dtcs.map { it.full }
+        )
+        // Прокрутка на последний код блока: заголовок уводит панель под нижний
+        // край, и на снимке от неё видна одна строка.
+        compose.onNodeWithText("P0130-29").performScrollTo()
+        // По UDS отвечает не только двигатель, поэтому строка не одна.
+        compose.onAllNodesWithText("Протокол: UDS (ISO 14229)").onFirst().assertExists()
+        compose.onNodeWithText("Кодов в блоке: 3").assertExists()
+        shot("25_modules_engine")
+        compose.onNodeWithText("Блок по адресу 760").performScrollTo()
+        shot("26_modules_abs")
+        compose.onNodeWithText("Блок по адресу 7A0").performScrollTo()
+        shot("27_modules_refused")
+
         // Сброс: предупреждение, подтверждение, и постоянный код остаётся.
         compose.onNodeWithText("Сбросить ошибки").performScrollTo().performClick()
         compose.waitForIdle()
