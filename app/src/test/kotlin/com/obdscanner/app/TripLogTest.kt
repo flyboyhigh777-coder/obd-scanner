@@ -83,7 +83,19 @@ class TripLogTest {
         // Секунда вместо пяти: тест не может ехать двадцать минут.
         vm.setTripLogIntervalSeconds(1)
 
-        compose.onNodeWithText("Демо").performClick()
+        // Выбор промежутка - на экране связи, рядом с выключателем журнала.
+        // На кнопке стоит только само число: подпись целиком («Запись раз в
+        // 5 с») в четверть ширины не влезала, и все четыре кнопки выглядели
+        // одинаково.
+        // Прокрутка к строке ПОД кнопками: иначе ряд кнопок остаётся за нижним
+        // краем, и на снимке от настройки видна одна подпись.
+        compose.onNodeWithText("Это 3600 замеров за час езды.").performScrollTo()
+        compose.onNodeWithText("1 с").assertExists()
+        compose.onNodeWithText("15 с").assertExists()
+        compose.onNodeWithText("1 мин").assertExists()
+        shot("69_triplog_settings")
+
+        compose.onNodeWithText("Демо").performScrollTo().performClick()
         compose.onNodeWithText("Подключиться").performClick()
         pumpUntil(30_000, "связь") { vm.connection.value is ConnectionState.Connected }
         pumpUntil(20_000, "первые данные") { vm.live.value.hasData }

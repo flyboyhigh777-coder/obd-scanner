@@ -496,5 +496,7 @@
     <string name="triplog_share_hint">The file is a plain table: it opens in Excel and in spreadsheet apps on the phone. Same numbers as here, plus the time of day of every sample.</string>
     <string name="triplog_setting_title">Trip log</string>
     <string name="triplog_setting_hint">Record readings while driving so you can review them on the Measurements tab. The last 20 trips are kept.</string>
-    <string name="triplog_interval">A sample every %1$d s</string>
+    <string name="triplog_interval_label">How often to record</string>
+    <string name="triplog_seconds">%1$d s</string>
+    <string name="triplog_interval_hint">That is %1$d samples per hour of driving.</string>
 </resources>

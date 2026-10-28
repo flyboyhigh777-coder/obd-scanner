@@ -331,16 +331,26 @@ fun ConnectScreen(viewModel: ObdViewModel) {
             Hint(stringResource(R.string.triplog_setting_hint))
             if (tripLogEnabled) {
                 // Промежуток: чаще - подробнее график, реже - короче таблица.
-                // Секунда даёт около 3600 строк на час езды, минута - шестьдесят.
+                // На кнопке только само число. «Запись раз в 5 с» на четверть
+                // ширины экрана не влезает, кнопка режет подпись по ширине - и
+                // все четыре читались одинаково, «Запись ра...»: выбрать по ним
+                // было нечего. Что это за число, сказано строкой выше, а что
+                // оно значит на практике - строкой ниже.
+                Hint(stringResource(R.string.triplog_interval_label))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(1, 5, 15, 60).forEach { seconds ->
                         SegmentButton(
-                            stringResource(R.string.triplog_interval, seconds),
+                            if (seconds < 60) {
+                                stringResource(R.string.triplog_seconds, seconds)
+                            } else {
+                                stringResource(R.string.triplog_minutes, seconds / 60)
+                            },
                             seconds == tripLogInterval,
                             Modifier.weight(1f)
                         ) { viewModel.setTripLogIntervalSeconds(seconds) }
                     }
                 }
+                Hint(stringResource(R.string.triplog_interval_hint, 3600 / tripLogInterval))
             }
         }
 

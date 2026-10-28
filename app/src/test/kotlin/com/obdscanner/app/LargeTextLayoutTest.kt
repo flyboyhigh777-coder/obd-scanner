@@ -10,9 +10,13 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -61,6 +65,40 @@ class LargeTextLayoutTest {
         }
     }
 
+    /**
+     * Подпись на кнопке нарисована целиком, а не обрезана многоточием.
+     *
+     * Кнопки-сегменты делят ширину поровну и режут подпись в одну строку.
+     * Глазом на снимке это видно сразу («Запись ра...»), а поиском по тексту
+     * не ловится вовсе: в семантике остаётся полная строка, та самая, которой
+     * на экране нет. Ловится разметкой - hasVisualOverflow и означает, что
+     * нарисовано меньше, чем есть.
+     */
+    private fun assertNotClipped(text: String) {
+        val node = compose.onNodeWithText(text).fetchSemanticsNode()
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+        assertTrue("у подписи нет разметки: $text", layouts.isNotEmpty())
+        // Именно видимый конец строки, а не hasVisualOverflow: тот поднимается
+        // и когда строка не влезла по высоте, а это у кнопок с крупным шрифтом
+        // обычное дело и к обрезанию подписи отношения не имеет.
+        val visible = layouts.first().getLineEnd(0, visibleEnd = true)
+        assertEquals("подпись обрезана: $text", text.length, visible)
+    }
+
+    @After
+    /**
+     * Вернуть обычный размер текста.
+     *
+     * Настройки Robolectric переживают и соседний тест, и соседний класс, а
+     * очистка файла не спасает: приложение в соседнем тесте поднимается
+     * раньше неё. Без возврата соседние снимки выходили с двойным шрифтом -
+     * как будто у них своя поломка.
+     */
+    fun restoreTextScale() {
+        runCatching { ViewModelProvider(compose.activity)[ObdViewModel::class.java].setTextScale(1.0f) }
+    }
+
     @Test
     fun biggestTextStillFits() {
         val vm = ViewModelProvider(compose.activity)[ObdViewModel::class.java]
@@ -69,7 +107,19 @@ class LargeTextLayoutTest {
         compose.waitForIdle()
 
         shot("39_large_text_connect")
-        compose.onNodeWithText("Демо").performClick()
+
+        // Промежуток записи журнала: четыре кнопки на ширину телефона. Раньше
+        // на каждой стояло «Запись раз в N с», и все четыре читались
+        // одинаково - «Запись ра...», выбирать было не из чего.
+        vm.setTripLogEnabled(true)
+        listOf("1 с", "5 с", "15 с", "1 мин").forEach { assertNotClipped(it) }
+        compose.onNodeWithText("1 мин").performScrollTo()
+        shot("39a_large_text_triplog_interval")
+
+        // Прокрутка обязательна: журнал поездок увёл экран вниз, и клик по
+        // кнопке за пределами видимой части до неё не доходит - связь потом
+        // молча уходит не туда.
+        compose.onNodeWithText("Демо").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Подключиться").performScrollTo().performClick()
         compose.waitForIdle()

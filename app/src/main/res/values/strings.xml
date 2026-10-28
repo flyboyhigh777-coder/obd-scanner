@@ -509,5 +509,7 @@
     <string name="triplog_share_hint">Файл — обычная таблица: открывается в Excel и в редакторах таблиц на телефоне. Там те же числа, что и здесь, плюс время суток каждого замера.</string>
     <string name="triplog_setting_title">Журнал поездок</string>
     <string name="triplog_setting_hint">Записывать показания в дороге, чтобы посмотреть их потом на вкладке «Замеры». Хранятся последние 20 поездок.</string>
-    <string name="triplog_interval">Запись раз в %1$d с</string>
+    <string name="triplog_interval_label">Как часто записывать</string>
+    <string name="triplog_seconds">%1$d с</string>
+    <string name="triplog_interval_hint">Это %1$d замеров за час езды.</string>
 </resources>
