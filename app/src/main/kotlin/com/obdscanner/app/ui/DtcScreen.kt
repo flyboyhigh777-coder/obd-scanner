@@ -375,7 +375,11 @@ private fun ModulesPanel(viewModel: ObdViewModel) {
             if (ModuleScan.isStandardObd(module.address)) {
                 Hint(stringResource(R.string.modules_engine_note))
             }
-            module.systems.forEach { Hint(it) }
+            // Без подписи эти строки читались как обрывки чужого текста:
+            // под заголовком блока просто висело «двигатель и КПП».
+            if (module.systems.isNotEmpty()) {
+                Hint(stringResource(R.string.modules_systems, module.systems.joinToString(", ")))
+            }
 
             when (val reply = module.reply) {
                 is ModuleReply.Refused -> Text(
@@ -384,9 +388,11 @@ private fun ModulesPanel(viewModel: ObdViewModel) {
                 )
 
                 is ModuleReply.Codes -> {
-                    Hint(reply.protocol.title)
+                    Hint(stringResource(R.string.modules_protocol, reply.protocol.title))
                     if (reply.dtcs.isEmpty()) {
                         Text(stringResource(R.string.modules_no_codes), color = GaugeGreen)
+                    } else {
+                        Hint(stringResource(R.string.modules_codes_count, reply.dtcs.size))
                     }
                     reply.dtcs.forEach { dtc ->
                         ModuleDtcRow(dtc)
@@ -414,7 +420,10 @@ private fun ModuleDtcRow(dtc: ModuleDtc) {
             if (dtc.lampRequested == true) add(stringResource(R.string.modules_status_lamp))
         }
         if (status.isNotEmpty()) Hint(status.joinToString(" | "))
-        dtc.failureType?.let { Hint(stringResource(R.string.modules_failure_type, it)) }
+        // Третий байт кода пишется только когда ему есть что сказать: байт 00
+        // означает «уточнения нет», и одинаковая строка под каждым из
+        // двадцати кодов заслоняет сами коды.
+        dtc.failureText?.let { Hint(it) }
     }
 }
 

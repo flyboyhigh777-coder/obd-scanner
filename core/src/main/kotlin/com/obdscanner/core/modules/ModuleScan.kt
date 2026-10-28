@@ -102,7 +102,124 @@ data class ModuleDtc(
 
     /** Описание берётся из общего каталога - там есть и C/B/U-коды. */
     val described: Dtc get() = Dtc(code)
+
+    /**
+     * Чем именно отказало - словами, или null, если сказать нечего.
+     *
+     * Третий байт кода UDS - это не "ещё один номер", а характер отказа:
+     * обрыв, замыкание на массу, значение вне диапазона. Таблица общая
+     * (ISO 14229-1, приложение D), поэтому её можно расшифровать для любой
+     * машины. Байт 00 означает "уточнения нет" - под каждым кодом его писать
+     * незачем, а в списке из двадцати кодов одинаковая строка под каждым
+     * просто заслоняет сами коды.
+     */
+    val failureText: String?
+        get() {
+            val type = failureType ?: return null
+            if (type == 0x00) return null
+            return ObdText.pick(
+                "Как отказало: " +
+                    (FAILURE_RU[type] ?: "код %02X, расшифровка у производителя".format(type)),
+                "Failure type: " +
+                    (FAILURE_EN[type] ?: "%02X, meaning is the manufacturer's".format(type)),
+            )
+        }
 }
+
+/**
+ * Характер отказа из третьего байта кода UDS (ISO 14229-1, приложение D).
+ *
+ * Здесь не весь список, а то, что реально встречается в машинах: цепь,
+ * сигнал, исполнительный механизм. Чего нет - показывается номером, и это
+ * честнее выдуманной расшифровки.
+ */
+private val FAILURE_RU = mapOf(
+    0x01 to "общая электрическая неисправность",
+    0x02 to "неисправность сигнала",
+    0x04 to "внутренняя ошибка блока",
+    0x08 to "нет связи по шине",
+    0x09 to "неисправность самого датчика или механизма",
+    0x11 to "замыкание на массу",
+    0x12 to "замыкание на плюс",
+    0x13 to "обрыв цепи",
+    0x14 to "обрыв или замыкание на массу",
+    0x15 to "обрыв или замыкание на плюс",
+    0x16 to "напряжение ниже нормы",
+    0x17 to "напряжение выше нормы",
+    0x18 to "ток ниже нормы",
+    0x19 to "ток выше нормы",
+    0x1A to "сопротивление ниже нормы",
+    0x1B to "сопротивление выше нормы",
+    0x1C to "напряжение вне диапазона",
+    0x1D to "ток вне диапазона",
+    0x21 to "сигнал слабее нормы",
+    0x22 to "сигнал сильнее нормы",
+    0x23 to "сигнал завис на низком уровне",
+    0x24 to "сигнал завис на высоком уровне",
+    0x29 to "сигнал недостоверен",
+    0x2B to "сигнал пропадает",
+    0x31 to "сигнала нет",
+    0x36 to "частота сигнала не та",
+    0x41 to "механизм заклинил",
+    0x42 to "механизм заклинил в открытом положении",
+    0x43 to "механизм заклинил в закрытом положении",
+    0x45 to "механизм заблокирован",
+    0x49 to "перегрев механизма",
+    0x51 to "нет калибровки",
+    0x55 to "блок не запрограммирован",
+    0x62 to "показания не сходятся с другими",
+    0x64 to "значение неправдоподобно",
+    0x73 to "механическая неисправность",
+    0x81 to "испорченные данные по шине",
+    0x87 to "сообщение по шине не приходит",
+    0x92 to "работает не так, как должно",
+    0x93 to "не работает",
+    0x98 to "перегрев",
+)
+
+private val FAILURE_EN = mapOf(
+    0x01 to "general electrical failure",
+    0x02 to "general signal failure",
+    0x04 to "internal module failure",
+    0x08 to "bus signal failure",
+    0x09 to "component failure",
+    0x11 to "short to ground",
+    0x12 to "short to battery",
+    0x13 to "open circuit",
+    0x14 to "open or short to ground",
+    0x15 to "open or short to battery",
+    0x16 to "voltage below threshold",
+    0x17 to "voltage above threshold",
+    0x18 to "current below threshold",
+    0x19 to "current above threshold",
+    0x1A to "resistance below threshold",
+    0x1B to "resistance above threshold",
+    0x1C to "voltage out of range",
+    0x1D to "current out of range",
+    0x21 to "signal amplitude below minimum",
+    0x22 to "signal amplitude above maximum",
+    0x23 to "signal stuck low",
+    0x24 to "signal stuck high",
+    0x29 to "signal invalid",
+    0x2B to "signal erratic",
+    0x31 to "no signal",
+    0x36 to "signal frequency incorrect",
+    0x41 to "actuator stuck",
+    0x42 to "actuator stuck open",
+    0x43 to "actuator stuck closed",
+    0x45 to "actuator blocked",
+    0x49 to "actuator over temperature",
+    0x51 to "missing calibration",
+    0x55 to "not programmed",
+    0x62 to "signal compare failure",
+    0x64 to "signal implausible",
+    0x73 to "mechanical failure",
+    0x81 to "invalid serial data received",
+    0x87 to "missing message",
+    0x92 to "performance or incorrect operation",
+    0x93 to "no operation",
+    0x98 to "over temperature",
+)
 
 /** Найденный блок: по какому адресу живёт и что рассказал. */
 data class FoundModule(
@@ -196,12 +313,12 @@ object ModuleScan {
             val mid = frame[i + 1]
             val lo = frame[i + 2]
             val status = frame.getOrNull(i + 3)
-            if (hi != 0 || mid != 0 || lo != 0) {
+            if (!isPadding(hi, mid, lo)) {
                 out.add(ModuleDtc(DtcCodec.decode(hi, mid), lo, status))
             }
             i += 4
         }
-        return ModuleReply.Codes(out, ModuleProtocol.UDS)
+        return ModuleReply.Codes(merge(out), ModuleProtocol.UDS)
     }
 
     /** "58 <сколько> [2 байта кода + статус]..." */
@@ -214,9 +331,45 @@ object ModuleScan {
             val hi = frame[i]
             val lo = frame[i + 1]
             val status = frame.getOrNull(i + 2)
-            if (hi != 0 || lo != 0) out.add(ModuleDtc(DtcCodec.decode(hi, lo), null, status))
+            if (!isPadding(hi, lo)) out.add(ModuleDtc(DtcCodec.decode(hi, lo), null, status))
             i += 3
         }
-        return ModuleReply.Codes(out, ModuleProtocol.KWP)
+        return ModuleReply.Codes(merge(out), ModuleProtocol.KWP)
+    }
+
+    /**
+     * Заполнитель, а не код.
+     *
+     * Кадр CAN всегда длиной 8 байт, и хвост сообщения добивают одним и тем
+     * же байтом - 00, AA, 55 или FF. Три одинаковых байта подряд из этого
+     * набора - это добивка: именно так в списке кодов появляется B2AAA-AA,
+     * которого в машине нет.
+     */
+    private val PADDING = setOf(0x00, 0xAA, 0x55, 0xFF)
+
+    private fun isPadding(vararg bytes: Int): Boolean =
+        bytes.first() in PADDING && bytes.all { it == bytes.first() }
+
+    /**
+     * Один код - одна строка.
+     *
+     * Блок может прислать один и тот же код дважды (так бывает, когда на
+     * запрос отвечают два блока сразу), и человек видит в списке три
+     * одинаковых строки с разными значками. Статусы при этом складываем: если
+     * хоть в одном ответе код горит прямо сейчас - значит горит.
+     */
+    private fun merge(dtcs: List<ModuleDtc>): List<ModuleDtc> {
+        val byCode = LinkedHashMap<String, ModuleDtc>()
+        for (dtc in dtcs) {
+            val was = byCode[dtc.full]
+            byCode[dtc.full] = if (was == null) dtc else was.copy(
+                status = when {
+                    was.status == null -> dtc.status
+                    dtc.status == null -> was.status
+                    else -> was.status or dtc.status
+                }
+            )
+        }
+        return byCode.values.toList()
     }
 }

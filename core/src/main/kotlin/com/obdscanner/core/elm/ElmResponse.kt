@@ -144,17 +144,44 @@ object ObdPayload {
      * ЭБУ на шине дают несколько кадров.
      */
     fun frames(reply: ElmReply): List<IntArray> {
-        // Формат "0:", "1:" - адаптер собрал длинный ответ сам, строка перед
-        // ним с общей длиной ("014") данных не несёт.
+        // Формат "0:", "1:" - адаптер собрал длинный ответ сам. Строка перед
+        // ним ("014") - это длина сообщения из ISO-TP, и она тут важна: всё,
+        // что за ней, адаптер добил заполнителем (00, AA, 55 или FF) до
+        // границы кадра. Без обрезки заполнитель попадает в данные и
+        // превращается в несуществующий код вроде B2AAA-AA.
         if (reply.lines.any { it.length > 1 && it[1] == ':' }) {
-            val merged = ArrayList<Int>()
+            val out = ArrayList<IntArray>()
+            var block: ArrayList<Int>? = null
+            var declared = 0
+
+            fun flush() {
+                val done = block ?: return
+                block = null
+                val cut = if (declared in 1..done.size) done.subList(0, declared) else done
+                if (cut.isNotEmpty()) out.add(cut.toIntArray())
+                declared = 0
+            }
+
             for (line in reply.lines) {
-                val colon = line.indexOf(':')
-                if (colon == 1) {
-                    merged.addAll(lineBytes(line.substring(2)).toList())
+                if (line.length > 1 && line[1] == ':') {
+                    // После "F:" нумерация идёт по кругу, поэтому "0:" начинает
+                    // новое сообщение только когда предыдущее уже набрало свою
+                    // длину. Новое сообщение - это второй блок, ответивший на
+                    // тот же запрос; склеивать их нельзя, иначе чужие байты
+                    // читаются как продолжение кодов первого.
+                    val filled = block?.let { declared in 1..it.size } ?: false
+                    if (line[0] == '0' && filled) flush()
+                    val bytes = lineBytes(line.substring(2))
+                    val target = block ?: ArrayList<Int>().also { block = it }
+                    target.addAll(bytes.toList())
+                } else if (line.length in 1..4 && isHex(line.uppercase())) {
+                    // Голая длина - значит начался следующий ответ.
+                    flush()
+                    declared = line.toInt(16)
                 }
             }
-            return if (merged.isEmpty()) emptyList() else listOf(merged.toIntArray())
+            flush()
+            return out
         }
 
         val out = ArrayList<IntArray>()

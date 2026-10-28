@@ -120,7 +120,9 @@
     <string name="modules_status_active">неисправность сейчас</string>
     <string name="modules_status_confirmed">код подтверждён</string>
     <string name="modules_status_lamp">зажигает лампу на панели</string>
-    <string name="modules_failure_type">Уточнение отказа: %1$02X (обрыв, замыкание или значение вне диапазона — расшифровка у производителя).</string>
+    <string name="modules_systems">Системы блока: %1$s</string>
+    <string name="modules_protocol">Протокол: %1$s</string>
+    <string name="modules_codes_count">Кодов в блоке: %1$d</string>
     <string name="dtc_monitors_title">Бортовые тесты</string>
     <string name="dtc_monitors_ready">Все тесты пройдены — к техосмотру готово</string>
     <string name="dtc_monitors_not_ready">Не завершено тестов: %1$d</string>

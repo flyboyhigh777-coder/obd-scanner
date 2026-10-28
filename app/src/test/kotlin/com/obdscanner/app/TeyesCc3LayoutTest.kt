@@ -162,6 +162,15 @@ class TeyesCc3LayoutTest {
             "виртуальные блоки найдены: ${vm.modules.value.found.map { it.hex }}",
             vm.modules.value.found.isNotEmpty()
         )
+        // Найденный блок должен быть видно целиком, и каждая строка в нём -
+        // подписанной. На живой машине под заголовком блока висели голые
+        // «двигатель и КПП» и «UDS (ISO 14229)», и читались они как обрывки
+        // чужого текста.
+        compose.onNodeWithText("Блок по адресу 760").performScrollTo()
+        compose.onNodeWithText("Системы блока: тормоза и шасси (ABS, ESP)").assertExists()
+        compose.onNodeWithText("Протокол: UDS (ISO 14229)").assertExists()
+        compose.onNodeWithText("Кодов в блоке: 2").assertExists()
+        compose.onNodeWithText("Как отказало: замыкание на массу").assertExists()
         shot("33_teyes_modules")
     }
 }

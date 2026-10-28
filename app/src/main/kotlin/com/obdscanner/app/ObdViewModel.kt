@@ -1142,6 +1142,20 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             val pids = if (slowTurn) all else fast
             val fresh = if (pids.isEmpty()) emptyMap() else session.readAll(pids)
             latest.putAll(fresh)
+            // Напряжение - отдельная команда поверх приборов, и на быстром
+            // круге ей делать нечего: оно меняется медленнее температуры.
+            if (slowTurn) {
+                val volts = readBatteryVoltage(session, latest[Pids.RPM.id])
+                // Блок управления отдаёт напряжение бортовой сети не всегда -
+                // на живой машине плитка писала «не отвечает», хотя
+                // напряжение в этот самый момент известно: его меряет сам
+                // адаптер прямо на разъёме. Это то же напряжение и уже
+                // сделанный обмен, так что плитке есть что показать.
+                val id = Pids.CONTROL_MODULE_VOLTAGE.id
+                if (volts != null && (id !in latest || id in session.unansweredPids)) {
+                    latest[id] = volts
+                }
+            }
             val values: Map<Int, Double> = LinkedHashMap(latest)
             if (fresh.isEmpty() && pids.isNotEmpty()) {
                 // Несколько пустых циклов подряд - адаптер выдернули или машину
@@ -1155,9 +1169,6 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 emptyCycles = 0
             }
-            // Напряжение - отдельная команда поверх приборов, и на быстром
-            // круге ей делать нечего: оно меняется медленнее температуры.
-            if (slowTurn) readBatteryVoltage(session, values[Pids.RPM.id])
             val custom = readCustomPids(session)
             // Статус лампы Check Engine меняется редко - спрашиваем его не каждый
             // цикл, чтобы не отнимать время у приборов.
@@ -1209,10 +1220,11 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      * когда ЭБУ уже молчит. PID 42 идёт запасным: это напряжение питания
      * контроллера, оно чуть ниже из-за проводки, но лучше, чем ничего.
      */
-    private fun readBatteryVoltage(session: ObdSession, rpm: Double?) {
+    /** @return напряжение с поправкой, если его удалось измерить. */
+    private fun readBatteryVoltage(session: ObdSession, rpm: Double?): Double? {
         val fromAdapter = session.adapterVoltage()
         val volts = fromAdapter ?: session.read(Pids.CONTROL_MODULE_VOLTAGE)
-        if (volts == null) return
+        if (volts == null) return null
         val corrected = volts + voltageOffset
         // Обороты - лучший признак работы мотора, но их может не быть в опросе:
         // набор приборов настраивается, и обороты из него можно убрать. Тогда
@@ -1222,6 +1234,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         val running = if (rpm != null) rpm >= Battery.RUNNING_RPM else corrected >= ALTERNATOR_VOLTS
         batteryMonitor.add(System.currentTimeMillis(), corrected, running)
         publishBattery(fromAdapter = fromAdapter != null)
+        return corrected
     }
 
     /**

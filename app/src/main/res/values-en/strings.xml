@@ -116,7 +116,9 @@
     <string name="modules_status_active">failing now</string>
     <string name="modules_status_confirmed">confirmed</string>
     <string name="modules_status_lamp">requests the dashboard lamp</string>
-    <string name="modules_failure_type">Failure type: %1$02X (open circuit, short or out of range - the exact meaning is the manufacturer\'s).</string>
+    <string name="modules_systems">Systems in this module: %1$s</string>
+    <string name="modules_protocol">Protocol: %1$s</string>
+    <string name="modules_codes_count">Codes in this module: %1$d</string>
     <string name="dtc_monitors_title">Readiness monitors</string>
     <string name="dtc_monitors_ready">All monitors complete — ready for an emissions test</string>
     <string name="dtc_monitors_not_ready">Monitors not complete: %1$d</string>

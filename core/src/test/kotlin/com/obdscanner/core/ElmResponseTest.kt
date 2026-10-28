@@ -69,6 +69,31 @@ class ElmResponseTest {
     }
 
     @Test
+    /**
+     * Длина перед многокадровым ответом - это граница данных.
+     *
+     * Последний кадр CAN всегда длиной восемь байт, и хвост сообщения добит
+     * заполнителем. В списке кодов эта добивка становилась кодом B2AAA-AA.
+     */
+    fun segmentedResponseIsCutToItsDeclaredLength() {
+        val raw = "00F\r0: 59 02 FF 01 06 00\r1: 08 15 71 00 09 14 00\r2: 00 0A AA AA AA AA AA\r\r>"
+        val frame = ObdPayload.frames(ElmReply.parse(raw)).single()
+        assertEquals(0x0F, frame.size)
+        assertEquals(0x0A, frame.last())
+    }
+
+    @Test
+    /** Два ответивших блока - два сообщения, а не одно склеенное. */
+    fun twoSegmentedAnswersStaySeparate() {
+        val raw = "00B\r0: 59 02 FF 01 06 00\r1: 08 15 71 00 09 AA AA\r" +
+            "00B\r0: 59 02 FF 14 00 00\r1: 0A 01 06 00 08 AA AA\r\r>"
+        val frames = ObdPayload.frames(ElmReply.parse(raw))
+        assertEquals(2, frames.size)
+        assertEquals(0x0B, frames[0].size)
+        assertEquals(0x0B, frames[1].size)
+    }
+
+    @Test
     /** ISO-TP с включёнными заголовками собирается сам. */
     fun isoTpFramesAreReassembled() {
         // Первый кадр (10 14 = длина 0x14) и два продолжения (21, 22).

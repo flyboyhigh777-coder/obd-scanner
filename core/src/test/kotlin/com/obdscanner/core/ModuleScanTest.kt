@@ -2,6 +2,7 @@ package com.obdscanner.core
 
 import com.obdscanner.core.elm.ElmReply
 import com.obdscanner.core.elm.ObdPayload
+import com.obdscanner.core.elm.ObdText
 import com.obdscanner.core.modules.ModuleProtocol
 import com.obdscanner.core.modules.ModuleReply
 import com.obdscanner.core.modules.ModuleScan
@@ -88,6 +89,94 @@ class ModuleScanTest {
         val reply = ModuleScan.parse(frames("5902FF"))
         assertTrue(reply.toString(), reply is ModuleReply.Codes)
         assertTrue((reply as ModuleReply.Codes).dtcs.isEmpty())
+    }
+
+    /**
+     * Заполнитель из хвоста кадра не становится кодом.
+     *
+     * Живая машина, адрес 7E0: пятнадцать байт ответа, а адаптер напечатал
+     * двадцать - последний кадр CAN всегда длиной восемь байт, и хвост добит
+     * байтами AA. Без обрезки по длине из них получался код B2AAA-AA,
+     * которого в машине нет, и человек шёл его искать.
+     */
+    @Test
+    fun paddingAtTheEndIsNotACode() {
+        val reply = ModuleScan.parse(
+            frames(
+                "00F",
+                "0: 59 02 FF 01 06 00",
+                "1: 08 15 71 00 09 14 00",
+                "2: 00 0A AA AA AA AA AA",
+            )
+        )
+        val codes = (reply as ModuleReply.Codes).dtcs.map { it.full }
+        assertEquals(listOf("P0106-00", "P1571-00", "P1400-00"), codes)
+    }
+
+    /** Та же добивка, но в одном кадре - ловится и без длины. */
+    @Test
+    fun paddingInsideASingleFrameIsNotACode() {
+        val reply = ModuleScan.parse(frames("5902FF01060008AAAAAAAA"))
+        assertEquals(listOf("P0106-00"), (reply as ModuleReply.Codes).dtcs.map { it.full })
+    }
+
+    /**
+     * Один код - одна строка.
+     *
+     * В выдаче с живой машины P1571-00 стоял трижды: один раз красным, два
+     * раза жёлтым. Для человека это три разные неисправности, хотя код один.
+     */
+    @Test
+    fun theSameCodeIsListedOnce() {
+        val reply = ModuleScan.parse(frames("5902FF01060008010600010106000A"))
+        val dtcs = (reply as ModuleReply.Codes).dtcs
+        assertEquals(1, dtcs.size)
+        assertEquals("P0106-00", dtcs.single().full)
+        assertEquals("статусы сложились", true, dtcs.single().active)
+        assertEquals(true, dtcs.single().confirmed)
+    }
+
+    /**
+     * Ответили два блока - читаем первый, а не склейку.
+     *
+     * Фильтр приёма на переборе стоит на весь диапазон 0x7XX, и на один
+     * запрос может ответить несколько блоков. Склеенные встык сообщения
+     * читаются как продолжение кодов первого блока - получаются коды из
+     * чужих байтов.
+     */
+    @Test
+    fun twoAnsweringModulesAreNotGluedTogether() {
+        val raw = frames(
+            "00B",
+            "0: 59 02 FF 01 06 00",
+            "1: 08 15 71 00 09 AA AA",
+            "00B",
+            "0: 59 02 FF 14 00 00",
+            "1: 0A 01 06 00 08 AA AA",
+        )
+        assertEquals("два отдельных сообщения", 2, raw.size)
+        val codes = (ModuleScan.parse(raw) as ModuleReply.Codes).dtcs.map { it.full }
+        assertEquals(listOf("P0106-00", "P1571-00"), codes)
+    }
+
+    /**
+     * Третий байт кода пишется только когда ему есть что сказать.
+     *
+     * 00 означает "уточнения нет". Строка про обрыв и замыкание под каждым из
+     * двадцати двух кодов не объясняла ничего, а список кодов заслоняла.
+     */
+    @Test
+    fun theFailureByteSpeaksOnlyWhenItKnowsSomething() {
+        val was = ObdText.russian
+        ObdText.russian = true
+        try {
+            val codes = (ModuleScan.parse(frames("5902FF010600084031130C")) as ModuleReply.Codes).dtcs
+            assertNull("00 - это молчание", codes.first { it.code == "P0106" }.failureText)
+            val open = codes.first { it.code == "C0031" }
+            assertTrue("13 - это обрыв: ${open.failureText}", open.failureText!!.contains("обрыв"))
+        } finally {
+            ObdText.russian = was
+        }
     }
 
     /** Адрес ответа - на восемь больше адреса запроса. */
