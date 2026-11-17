@@ -222,6 +222,40 @@ object MonitorSupport {
 /** Названия мониторов (MID) из SAE J1979. */
 object MonitorIds {
 
+    /**
+     * Общие данные по пропускам воспламенения (SAE J1979, MID $A1), а за ними
+     * по монитору на цилиндр: $A2 - ПЕРВЫЙ цилиндр, $AD - двенадцатый.
+     *
+     * Смещение на единицу здесь не описка. Номера $00, $20, $40, $60, $80,
+     * $A0, $C0 и $E0 заняты картами поддержки (см. [MonitorSupport.RANGE_MIDS]),
+     * поэтому мониторы пропусков и начинаются с $A1, а не с круглого $A0.
+     *
+     * Ошибиться в этой нумерации дороже, чем кажется: это единственное место
+     * во всём OBD-II, где видно, КАКОЙ цилиндр пропускает, и сдвиг на единицу
+     * отправит человека менять свечу не в том цилиндре.
+     */
+    const val MISFIRE_GENERAL = 0xA1
+
+    val MISFIRE_CYLINDER_RANGE = 1..12
+
+    /** Номер цилиндра по MID, или null - если это не монитор пропусков. */
+    fun misfireCylinder(mid: Int): Int? =
+        (mid - MISFIRE_GENERAL).takeIf { it in MISFIRE_CYLINDER_RANGE }
+
+    fun isMisfire(mid: Int): Boolean = mid == MISFIRE_GENERAL || misfireCylinder(mid) != null
+
+    /**
+     * Какие мониторы пропусков спросить у блока с таким числом цилиндров.
+     *
+     * Спрашиваем независимо от того, объявил их блок или нет: заявленная карта
+     * поддержки у блоков бывает неполной, а это ровно тот случай, когда
+     * пропустить данные обиднее всего.
+     */
+    fun misfireProbe(cylinders: Int): List<Int> {
+        val count = cylinders.coerceIn(MISFIRE_CYLINDER_RANGE)
+        return listOf(MISFIRE_GENERAL) + (1..count).map { MISFIRE_GENERAL + it }
+    }
+
     private fun bankSensor(ru: String, en: String, index: Int): Pair<String, String> {
         val bank = (index / 4) + 1
         val sensor = (index % 4) + 1
@@ -252,9 +286,9 @@ object MonitorIds {
         put(0x3B, "Пары топлива (утечка 0.040\")" to "EVAP monitor (0.040\")")
         put(0x3C, "Пары топлива (утечка 0.020\")" to "EVAP monitor (0.020\")")
         put(0x3D, "Продувка адсорбера" to "Purge flow monitor")
-        put(0xA1, "Пропуски воспламенения, общие данные" to "Misfire monitor general data")
-        for (c in 1..16) {
-            put(0xA1 + c, "Пропуски воспламенения, цилиндр $c" to "Misfire cylinder $c data")
+        put(MISFIRE_GENERAL, "Пропуски воспламенения, общие данные" to "Misfire monitor general data")
+        for (c in MISFIRE_CYLINDER_RANGE) {
+            put(MISFIRE_GENERAL + c, "Пропуски воспламенения, цилиндр $c" to "Misfire cylinder $c data")
         }
         put(0xB2, "Сажевый фильтр, банк 1" to "PM filter monitor bank 1")
         put(0xB3, "Сажевый фильтр, банк 2" to "PM filter monitor bank 2")

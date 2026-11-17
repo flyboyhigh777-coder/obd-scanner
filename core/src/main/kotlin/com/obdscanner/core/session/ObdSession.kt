@@ -393,8 +393,8 @@ class ObdSession(
      * приходит несколько записей, и у каждой свой номер монитора - отбросив
      * первый как "эхо", мы сдвинули бы все записи на байт.
      */
-    fun readMonitorTests(mid: Int): List<MonitorTest> {
-        val payload = readMonitorPayload(mid) ?: return emptyList()
+    fun readMonitorTests(mid: Int, timeoutMillis: Long = 3000): List<MonitorTest> {
+        val payload = readMonitorPayload(mid, timeoutMillis) ?: return emptyList()
         val can = protocol?.isCan ?: true
         return if (can) {
             MonitorTest.decodeCan(payload)
@@ -403,8 +403,8 @@ class ObdSession(
         }
     }
 
-    private fun readMonitorPayload(mid: Int): IntArray? {
-        val reply = adapter.request(Elm.request(Elm.Service.MONITOR_TESTS, mid), timeoutMillis = 3000)
+    private fun readMonitorPayload(mid: Int, timeoutMillis: Long = 3000): IntArray? {
+        val reply = adapter.request(Elm.request(Elm.Service.MONITOR_TESTS, mid), timeoutMillis)
         if (reply.isError) return null
         val frames = ObdPayload.allFrameData(reply, Elm.Service.MONITOR_TESTS)
         if (frames.isEmpty()) return null
@@ -420,11 +420,27 @@ class ObdSession(
      * объявил блок, поэтому [shouldStop] обязателен: на машине с четырьмя
      * банками их больше тридцати.
      */
-    fun readAllMonitorTests(shouldStop: () -> Boolean = { false }): List<MonitorTest> {
+    fun readAllMonitorTests(
+        shouldStop: () -> Boolean = { false },
+        cylinders: Int = 0,
+    ): List<MonitorTest> {
         val out = ArrayList<MonitorTest>()
-        for (mid in readSupportedMonitorIds()) {
+        val declared = readSupportedMonitorIds()
+        for (mid in declared) {
             if (shouldStop()) break
             out.addAll(readMonitorTests(mid))
+        }
+        // Пропуски воспламенения по цилиндрам спрашиваем отдельно и независимо
+        // от карты поддержки. Карта у блоков бывает неполной - мы на этом уже
+        // обжигались с расходомером, - а здесь цена ошибки выше: это
+        // единственное место в OBD-II, где видно, какой именно цилиндр
+        // пропускает, и видно это раньше, чем ЭБУ запишет код.
+        if (cylinders > 0) {
+            for (mid in MonitorIds.misfireProbe(cylinders)) {
+                if (shouldStop()) break
+                if (mid in declared) continue
+                out.addAll(readMonitorTests(mid, timeoutMillis = MISFIRE_PROBE_MILLIS))
+            }
         }
         return out
     }
@@ -805,6 +821,13 @@ class ObdSession(
          * больше двух сотен, и каждые лишние 50 мс - это ещё десять секунд
          * ожидания с телефоном в руках.
          */
+        /**
+         * Таймаут пробного запроса монитора, которого блок не объявлял.
+         * Незаявленный номер обычно отвечает отказом сразу, а ждать по три
+         * секунды на каждый из пяти - это полминуты на пустом месте.
+         */
+        const val MISFIRE_PROBE_MILLIS = 1200L
+
         const val MODULE_TIMEOUT_MILLIS = 100
 
         /** Свой таймаут чуть больше адаптерного - чтобы успеть прочитать ответ. */

@@ -5,6 +5,7 @@ import com.obdscanner.core.dtc.DtcSource
 import com.obdscanner.core.elm.AdapterInfo
 import com.obdscanner.core.elm.ObdProtocol
 import com.obdscanner.core.elm.ObdText
+import com.obdscanner.core.monitor.MonitorIds
 import com.obdscanner.core.monitor.MonitorTest
 import com.obdscanner.core.obd.InUsePerformance
 import com.obdscanner.core.obd.FuelSystemStatus
@@ -68,6 +69,15 @@ data class QuickCheckReport(
     val dtcTotal: Int get() = stored.size + pending.size + permanent.size
 
     val failedTests: List<MonitorTest> get() = monitorTests.filter { it.passed == false }
+
+    /**
+     * Мониторы пропусков воспламенения - отдельно от остальных тестов режима
+     * 06. Это единственное место в OBD-II, где видно, КАКОЙ цилиндр
+     * пропускает, поэтому в отчёте они стоят своим разделом, а не теряются
+     * среди лямбда-зондов.
+     */
+    val misfireTests: List<MonitorTest>
+        get() = monitorTests.filter { MonitorIds.isMisfire(it.mid) }.sortedBy { it.mid }
 
     /**
      * Короткий вывод: именно он отвечает на вопрос "ехать можно?".
@@ -210,6 +220,36 @@ data class QuickCheckReport(
             freezeFrame.forEach { (id, value) -> row(pidLabel(id), pidValue(id, value)) }
         }
 
+        if (misfireTests.isNotEmpty()) {
+            section(if (ru) "Пропуски воспламенения по цилиндрам" else "Misfire counts by cylinder")
+            out.add(
+                ReportBlock.Note(
+                    if (ru) {
+                        "Счётчик растёт с первого пропуска, а код P030x ЭБУ запишет " +
+                            "только когда их доля перевалит порог. Поэтому цилиндр, который " +
+                            "начал троить, видно здесь раньше, чем загорится лампа."
+                    } else {
+                        "The counter grows from the first misfire, while a P030x code appears " +
+                            "only once the rate crosses a threshold. A cylinder that has started " +
+                            "to misfire shows up here before the lamp comes on."
+                    }
+                )
+            )
+            for (test in misfireTests) {
+                val cylinder = MonitorIds.misfireCylinder(test.mid)
+                val label = if (cylinder != null) {
+                    if (ru) "Цилиндр $cylinder" else "Cylinder $cylinder"
+                } else {
+                    if (ru) "Все цилиндры" else "All cylinders"
+                }
+                // Ноль пропусков - это здоровый цилиндр, и показать его так же
+                // важно, как больной: сравнивать не с чем, если видно только
+                // один.
+                val tone = if (test.rawValue > 0) ReportTone.BAD else ReportTone.GOOD
+                row("$label / ${test.testTitle}", test.formatValue(), tone)
+            }
+        }
+
         if (monitorTests.isNotEmpty()) {
             section(if (ru) "Результаты бортовых тестов (режим 06)" else "On-board test results (mode 06)")
             monitorTests.forEach { test ->
@@ -343,6 +383,11 @@ class QuickCheck(
      * состояние, в котором машину спрашивать нельзя.
      */
     private val adapterInfo: AdapterInfo? = null,
+    /**
+     * Сколько цилиндров у мотора. Нужно ровно для одного: спросить мониторы
+     * пропусков воспламенения по каждому цилиндру. Ноль - не спрашивать.
+     */
+    private val cylinders: Int = 0,
     private val now: () -> Long = { System.currentTimeMillis() }
 ) {
 
@@ -403,7 +448,7 @@ class QuickCheck(
 
         if (withMonitorTests) {
             onStep(QuickCheckStep.MONITOR_TESTS)
-            val tests = session.readAllMonitorTests(shouldStop)
+            val tests = session.readAllMonitorTests(shouldStop, cylinders = cylinders)
             if (tests.isEmpty()) {
                 skipped.add(
                     ObdText.pick(

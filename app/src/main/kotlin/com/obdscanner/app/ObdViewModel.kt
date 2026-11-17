@@ -1752,6 +1752,9 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                     // повторять проверку внутри полной нельзя - она на
                     // несколько секунд уводит адаптер в другое состояние.
                     adapterInfo = _adapter.value.info,
+                    // Сколько цилиндров - знает профиль машины; без этого
+                    // мониторы пропусков по цилиндрам спрашивать не у чего.
+                    cylinders = _profile.value.cylinders,
                 )
                     .run(
                         onStep = { step ->
@@ -1797,7 +1800,12 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun runTestsRead(session: ObdSession) {
         val locations = session.readO2SensorLocations()
-        val monitorTests = session.readAllMonitorTests { testsStop }
+        // Цилиндры передаём и сюда: экран тестов - это то место, куда человек
+        // возвращается снова и снова, пока ищет троящий цилиндр.
+        val monitorTests = session.readAllMonitorTests(
+            shouldStop = { testsStop },
+            cylinders = _profile.value.cylinders,
+        )
         val legacyTests = if (session.protocol?.isCan == false) {
             locations.filter { it.present }.flatMap { location ->
                 if (testsStop) emptyList() else session.readO2SensorTests(location.mask)
